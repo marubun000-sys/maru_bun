@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, num, toast, modal, ico, confirmBox, promptModal, errMsg } from '../utils.js';
+import { $, $$, esc, fmt, num, toast, modal, ico, confirmBox, promptModal, errMsg, onLive } from '../utils.js';
 
 export async function render(root) {
   let tab = 'items', cats = [], items = [], addons = [];
@@ -132,4 +132,5 @@ export async function render(root) {
   });
 
   await load();
+  return onLive(() => { if (!document.querySelector('.modal-wrap')) load().catch(() => {}); }, 1500);
 }

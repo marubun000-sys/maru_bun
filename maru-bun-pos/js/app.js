@@ -1,6 +1,7 @@
 import { sb, DEMO } from './sb.js';
 import { state, loadSettings, saveSettings } from './state.js';
-import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg } from './utils.js';
+import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen } from './utils.js';
+import { initI18n, setLang, getLang } from './i18n.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
 import * as dashboard from './pages/dashboard.js';
@@ -22,20 +23,45 @@ const PAGES = [
 ];
 
 const app = $('#app');
-let cleanup = null, pollTimer = null, chan = null, routeToken = 0;
+let cleanup = null, chan = null, chan2 = null, routeToken = 0, timers = [];
+const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
+
+// =====================================================================
+//  Theme (dark / light) + language buttons
+// =====================================================================
+const themeNow = () => document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+function setTheme(t) {
+  document.documentElement.dataset.theme = t; store.set('mb_theme', t);
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'light' ? '#f4f4f6' : '#0b0b0c';
+  paintCtl();
+}
+function ctlHTML() {
+  return `<span class="ctls"><button class="ctl" data-ctl="theme" title="Dark / Light"></button><button class="ctl" data-ctl="lang" data-noi18n title="English / සිංහල"></button></span>`;
+}
+function paintCtl() {
+  $$('[data-ctl=theme]').forEach(b => { b.innerHTML = themeNow() === 'dark' ? ico('sun', 17) : ico('moon', 17); });
+  $$('[data-ctl=lang]').forEach(b => { b.textContent = getLang() === 'si' ? 'English' : 'සිංහල'; });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ctl]'); if (!b) return;
+  if (b.dataset.ctl === 'theme') setTheme(themeNow() === 'dark' ? 'light' : 'dark');
+  else { setLang(getLang() === 'si' ? 'en' : 'si'); paintCtl(); }
+});
 
 // =====================================================================
 //  Login (+ 2-step verification)
 // =====================================================================
 function loginShell(inner) {
-  app.innerHTML = `<div class="login-wrap"><div class="login">
+  app.innerHTML = `<div class="login-wrap"><div class="login-ctl">${ctlHTML()}</div><div class="login">
     <img src="assets/logo.jpg" alt="logo"><h1>${esc(state.settings.shop_name)}</h1>
     <div class="tag">${esc(state.settings.tagline)}</div>${inner}
     ${DEMO ? `<div class="demo-note">DEMO MODE (no Supabase keys yet)<br>Login: <b>admin@demo.lk</b> / <b>admin123</b></div>` : ''}
   </div></div>`;
+  paintCtl();
 }
 
 function showLogin() {
+  stopLive();
   loginShell(`<div id="err"></div>
     <form id="lf">
       <label>Email<input type="email" id="em" autocomplete="username" required></label>
@@ -88,6 +114,8 @@ async function boot() {
 // =====================================================================
 //  Shell
 // =====================================================================
+const role = () => store.get('mb_role', 'both');
+
 function startApp() {
   app.innerHTML = `<div class="shell">
     <aside class="side">
@@ -96,19 +124,30 @@ function startApp() {
       <div class="side-foot">${esc(state.user.email || '')}<br><a href="#" id="logout" style="color:var(--gold)">Sign out</a></div>
     </aside>
     <main class="main">
+      <div class="soundbar" id="soundbar" hidden>${ico('bell', 16)} Tap here to turn on sound alerts</div>
       <div class="topbar"><b id="pageTitle"></b><div class="spacer"></div>
+        <span class="clock" id="clock" data-noi18n></span>
+        <label class="devsel">Device: <select id="role"><option value="both">Both</option><option value="counter">Counter</option><option value="kitchen">Kitchen</option></select></label>
         <div class="cashier" id="cashier" title="Change cashier on duty">${ico('edit', 14)} Cashier: <b id="cashierName"></b></div>
+        ${ctlHTML()}
       </div>
       <div class="page" id="page"></div>
     </main></div>`;
-  applyBranding();
+  applyBranding(); paintCtl();
+  $('#role').value = role(); $('#role').onchange = e => store.set('mb_role', e.target.value);
   $('#logout').onclick = async e => { e.preventDefault(); stopLive(); await sb.auth.signOut(); location.hash = ''; showLogin(); };
   $('#cashier').onclick = async () => {
     const v = await promptModal({ title: 'Cashier on duty', label: 'Name of the person at the counter now', value: state.settings.cashier || '' });
     if (v === null) return;
     try { await saveSettings({ cashier: v.trim() }); toast('Cashier updated'); } catch (e) { toast(errMsg(e), 'err'); }
   };
-  window.addEventListener('settings-changed', applyBranding);
+  const sbar = $('#soundbar');
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+    sbar.hidden = false;
+    const hide = () => { sbar.hidden = true; beep('done'); };
+    sbar.onclick = hide; document.addEventListener('pointerdown', () => { sbar.hidden = true; }, { once: true });
+  }
+  window.removeEventListener('settings-changed', applyBranding); window.addEventListener('settings-changed', applyBranding);
   startLive();
   if (!location.hash.startsWith('#/')) location.hash = '#/pos';
   route();
@@ -139,21 +178,28 @@ async function route() {
   }
 }
 window.addEventListener('hashchange', () => { if (state.user) route(); });
-// browsers only allow sound after a click, so wake the audio engine silently on the first one
-document.addEventListener('click', () => { try { const C = window.AudioContext || window.webkitAudioContext; const c = new C(); c.resume(); c.close(); } catch { /* ignore */ } }, { once: true });
 
 // =====================================================================
-//  Live orders: realtime + polling fallback -> alerts + kitchen badge
+//  Live: realtime + polling -> alerts, kitchen badge, auto-refresh on every device
 // =====================================================================
 const seen = new Set(); let primed = false;
+const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch { /* ignore */ } };
 function handleOrder(o) {
   if (!o || !o.id) return;
-  const k = `${o.id}:${o.status}`;
+  const k = okey(o);
   if (seen.has(k)) return;
   seen.add(k);
   if (!primed || state.own.has(k)) return;
-  if (o.status === 'pending') { toast(`New order ${billNo(o.bill_no)} · ${o.order_type === 'takeaway' ? 'Takeaway' : 'Dine-in'}`, 'info', 6000); beep('new'); }
-  else if (o.status === 'served') { toast(`Order ${billNo(o.bill_no)} is served ✓`, 'ok', 6000); beep('done'); }
+  if (o.status === 'pending') {
+    if (role() === 'counter') return;                       // counter devices don't need kitchen alerts
+    toast(`New order ${billNo(o.bill_no)} · ${o.order_type === 'takeaway' ? 'Takeaway' : 'Dine-in'}`, 'info', 0, { sticky: true, repeat: () => beep('new') });
+    beep('new'); buzz([300, 150, 300]);
+  } else if (o.status === 'served') {
+    if (role() === 'kitchen') return;                       // kitchen devices don't need "served" alerts
+    if (noKitchen(o)) return;                                // saved straight as served (not sent to kitchen)
+    toast(`Order ${billNo(o.bill_no)} is served ✓`, 'ok', 12000);
+    beep('done'); buzz([200, 100, 200]);
+  }
 }
 function setBadge(n) { const b = $('#kBadge'); if (!b) return; b.textContent = n; b.hidden = !n; }
 
@@ -170,6 +216,26 @@ async function poll() {
     if (seen.size !== before) window.dispatchEvent(new Event('orders-changed'));
   } catch { /* offline - try again next tick */ }
 }
+async function refreshSettings() {
+  try {
+    const old = JSON.stringify(state.settings);
+    await loadSettings();
+    if (JSON.stringify(state.settings) !== old) window.dispatchEvent(new Event('settings-changed'));
+  } catch { /* ignore */ }
+}
+
+let lastDay = dstr(Date.now());
+function clockTick() {
+  const c = $('#clock'); if (c) c.textContent = nowLabel();
+  const d = dstr(Date.now());
+  if (d !== lastDay) {                                       // midnight in Sri Lanka -> a new day starts
+    lastDay = d;
+    toast('New day started: screens refreshed', 'info', 6000);
+    refreshSettings(); route();
+  }
+}
+const onVisible = () => { if (!document.hidden && state.user) { poll(); window.dispatchEvent(new Event('data-changed')); clockTick(); } };
+
 function startLive() {
   stopLive();
   try {
@@ -179,15 +245,32 @@ function startLive() {
       poll();
     }).subscribe();
   } catch (e) { console.warn('realtime unavailable', e); }
-  poll(); pollTimer = setInterval(poll, 10000);
-  window.addEventListener('orders-changed', poll0);
+  try {                                                      // menu / stock / settings changed on another device
+    chan2 = sb.channel('catalog-live');
+    ['items', 'categories', 'addons', 'inventory', 'settings'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
+      window.dispatchEvent(new Event('data-changed'));
+      if (t === 'settings') refreshSettings();
+    }));
+    chan2.subscribe();
+  } catch (e) { console.warn('realtime (catalog) unavailable', e); }
+  lastDay = dstr(Date.now()); clockTick();
+  poll();
+  timers = [
+    setInterval(poll, 10000),
+    setInterval(clockTick, 15000),
+    setInterval(() => { if (!document.hidden) { refreshSettings(); window.dispatchEvent(new Event('data-changed')); } }, 20000), // safety net if realtime is off
+  ];
+  document.addEventListener('visibilitychange', onVisible);
 }
-const poll0 = () => setTimeout(poll, 300);
 function stopLive() {
-  clearInterval(pollTimer); pollTimer = null; primed = false; seen.clear();
-  window.removeEventListener('orders-changed', poll0);
-  if (chan) { try { sb.removeChannel(chan); } catch { /* ignore */ } chan = null; }
+  timers.forEach(clearInterval); timers = []; primed = false; seen.clear();
+  document.removeEventListener('visibilitychange', onVisible);
+  [chan, chan2].forEach(c => { if (c) { try { sb.removeChannel(c); } catch { /* ignore */ } } });
+  chan = chan2 = null;
   if (typeof cleanup === 'function') { try { cleanup(); } catch { /* ignore */ } cleanup = null; }
 }
 
+// ---- go ----
+{ const th = store.get('mb_theme', 'dark'); document.documentElement.dataset.theme = th === 'light' ? 'light' : 'dark'; }
+initI18n();
 boot();

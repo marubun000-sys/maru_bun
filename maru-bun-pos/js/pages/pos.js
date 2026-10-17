@@ -1,7 +1,7 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
-import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg } from '../utils.js';
-import { payLabel, showBillModal } from '../bill.js';
+import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive } from '../utils.js';
+import { payLabel, showBillModal, printHTML, billHTML, kotHTML } from '../bill.js';
 
 export async function render(root) {
   const [rc, ri, ra] = await Promise.all([
@@ -10,10 +10,14 @@ export async function render(root) {
     sb.from('addons').select('*').eq('active', true).order('name'),
   ]);
   if (rc.error) throw rc.error; if (ri.error) throw ri.error; if (ra.error) throw ra.error;
-  const cats = rc.data || []; let items = ri.data || []; const addons = ra.data || [];
+  let cats = rc.data || []; let items = ri.data || []; const addons = ra.data || [];
   const s = () => state.settings;
 
   // ---- order state ----
+  const PK = 'mb_pos_prefs';
+  let prefs = { kitchen: true, kot: false, bill: false };
+  try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(PK) || '{}') }; } catch { /* ignore */ }
+  const savePrefs = () => { try { localStorage.setItem(PK, JSON.stringify(prefs)); } catch { /* ignore */ } };
   let cart = [], activeCat = 'all', search = '', orderType = 'dine_in', discType = 'pct', discVal = num(s().discount_pct);
   let scOn = !!s().service_charge_enabled, pay = (s().payment_methods || ['cash'])[0] || 'cash', cash = '', placing = false;
 
@@ -31,6 +35,11 @@ export async function render(root) {
       <input id="note" placeholder="Kitchen note (optional)">
       <div class="disc"><select id="dtype"><option value="pct">Discount %</option><option value="amt">Discount LKR</option></select><input id="dval" type="number" min="0" step="any" value="${discVal || ''}" placeholder="0"></div>
       <label class="check"><input type="checkbox" id="sc" ${scOn ? 'checked' : ''}> Service charge (${num(s().service_charge_pct)}%)</label>
+      <div class="opts">
+        <label class="check"><input type="checkbox" id="oKitchen" ${prefs.kitchen ? 'checked' : ''}> Send to kitchen</label>
+        <label class="check"><input type="checkbox" id="oKot" ${prefs.kot ? 'checked' : ''}> Print kitchen slip</label>
+        <label class="check"><input type="checkbox" id="oBill" ${prefs.bill ? 'checked' : ''}> Print customer bill</label>
+      </div>
       <div class="totals" id="totals"></div>
       <div class="pays" id="pays"></div>
       <div id="cashBox"></div>
@@ -148,12 +157,13 @@ export async function render(root) {
       subtotal: c.sub, discount: c.disc, discount_label: c.disc > 0 ? (discType === 'pct' ? `${discVal}%` : 'LKR') : '',
       service_pct: c.pct, service_charge: c.sc, total: c.total, payment_method: pay,
       cash_received: pay === 'cash' ? got : 0, change_given: pay === 'cash' && got > c.total ? r2(got - c.total) : 0,
-      cashier: s().cashier || '', status: 'pending',
+      cashier: s().cashier || '', status: prefs.kitchen ? 'pending' : 'served', served_at: prefs.kitchen ? null : new Date().toISOString(),
     };
+    if (!prefs.kitchen) order.created_at = order.served_at; // same instant = "saved straight as served" (no kitchen alerts)
     try {
-      state.own.add(`${order.id}:pending`); // set before saving so we don't alert ourselves
+      state.own.add(prefs.kitchen ? `${order.id}:pending` : `${order.id}:served:${new Date(order.served_at).getTime()}`); // set before saving so we don't alert ourselves
       const { data, error } = await sb.from('orders').insert(order).select().single();
-      if (error) { state.own.delete(`${order.id}:pending`); throw error; }
+      if (error) { state.own.clear(); throw error; }
       // reduce stock
       const used = {};
       cart.forEach(l => { used[l.item_id] = (used[l.item_id] || 0) + l.qty; });
@@ -162,7 +172,11 @@ export async function render(root) {
       if (fresh) items = fresh;
       resetOrder();
       window.dispatchEvent(new Event('orders-changed'));
-      toast('Order sent to kitchen');
+      toast(prefs.kitchen ? 'Order sent to kitchen' : 'Order saved');
+      const slips = [];
+      if (prefs.kot) slips.push(kotHTML(data));
+      if (prefs.bill) slips.push(billHTML(data));
+      if (slips.length) printHTML(...slips);
       showBillModal(data, { title: `Order placed · Bill ${'MB-' + String(data.bill_no).padStart(5, '0')}` });
     } catch (e) { console.error(e); toast('Could not save order: ' + errMsg(e), 'err', 6000); }
     placing = false; renderTotals();
@@ -194,11 +208,29 @@ export async function render(root) {
   $('#pays', R).onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; pay = b.dataset.p; renderPays(); };
   $('#cashBox', R).addEventListener('input', e => { if (e.target.id === 'cash') { cash = e.target.value; renderChange(); } });
   $('#cashBox', R).addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (!b) return; cash = String(b.dataset.q); $('#cash').value = cash; renderChange(); });
+  $('#oKitchen', R).onchange = e => { prefs.kitchen = e.target.checked; savePrefs(); };
+  $('#oKot', R).onchange = e => { prefs.kot = e.target.checked; savePrefs(); };
+  $('#oBill', R).onchange = e => { prefs.bill = e.target.checked; savePrefs(); };
   $('#place', R).onclick = place;
 
   const onSettings = () => { $('#sc').parentElement.lastChild.textContent = ` Service charge (${num(s().service_charge_pct)}%)`; renderPays(); renderTotals(); };
   window.addEventListener('settings-changed', onSettings);
 
+  // menu / stock changed on another device (or after another counter's sale) -> refresh the item list, keep the cart
+  async function reloadCatalog() {
+    if (placing) return;
+    const [a, b, c] = await Promise.all([
+      sb.from('categories').select('*').order('sort').order('name'),
+      sb.from('items').select('*').eq('active', true).order('name'),
+      sb.from('addons').select('*').eq('active', true).order('name'),
+    ]);
+    if (a.error || b.error || c.error) return;
+    cats = a.data || []; items = b.data || []; addons.length = 0; (c.data || []).forEach(x => addons.push(x));
+    if (activeCat !== 'all' && !cats.some(x => x.id === activeCat)) activeCat = 'all';
+    renderChips(); renderItems(); renderTotals();
+  }
+  const offLive = onLive(reloadCatalog, 1200);
+
   renderChips(); renderItems(); renderLines(); renderPays(); renderTotals();
-  return () => window.removeEventListener('settings-changed', onSettings);
+  return () => { window.removeEventListener('settings-changed', onSettings); offLive(); };
 }

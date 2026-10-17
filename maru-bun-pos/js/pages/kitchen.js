@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
-import { $, esc, billNo, tstr, dayRange, toast, beep, ico, errMsg } from '../utils.js';
+import { $, esc, billNo, tstr, dayRange, toast, beep, ico, errMsg, onLive, noKitchen } from '../utils.js';
 import { kotHTML, printHTML, typeLabel } from '../bill.js';
 
 export async function render(root) {
@@ -19,10 +19,12 @@ export async function render(root) {
     try {
       const [p, sv] = await Promise.all([
         sb.from('orders').select('*').eq('status', 'pending').order('created_at', { ascending: true }),
-        sb.from('orders').select('*').eq('status', 'served').gte('created_at', dayRange()[0]).order('created_at', { ascending: false }).limit(12),
+        sb.from('orders').select('*').eq('status', 'served').gte('created_at', dayRange()[0]).order('created_at', { ascending: false }).limit(40),
       ]);
       if (p.error) throw p.error;
-      pending = p.data || []; served = sv.data || [];
+      pending = p.data || [];
+      // orders saved straight as 'served' (not sent to kitchen) are not shown here
+      served = (sv.data || []).filter(o => !noKitchen(o)).slice(0, 12);
       draw();
     } catch (e) { $('#pending').innerHTML = `<div class="err">${esc(errMsg(e))}</div>`; }
     busy = false;
@@ -35,7 +37,7 @@ export async function render(root) {
       <div class="muted small">${tstr(o.created_at)}${done ? '' : ` · <b style="color:${m >= 10 ? 'var(--bad)' : 'var(--text)'}">${m} min</b> waiting`}${o.customer_name ? ' · ' + esc(o.customer_name) : ''}</div>
       <ul>${(o.items || []).map(l => `<li><b>${l.qty} ×</b> ${esc(l.name)}${(l.addons || []).length ? `<small>+ ${l.addons.map(a => esc(a.name)).join(', ')}</small>` : ''}</li>`).join('')}</ul>
       ${o.note ? `<div class="knote">Note: ${esc(o.note)}</div>` : ''}
-      <div class="row">${done ? '' : `<button class="btn" data-a="served">${ico('check', 16)} Mark Served</button>`}<button class="btn ghost" data-a="print">${ico('print', 16)} Print</button></div>
+      <div class="row wrap">${done ? `<button class="btn ghost" data-a="undo">${ico('undo', 16)} Undo</button>` : `<button class="btn" data-a="served">${ico('check', 16)} Mark Served</button>`}<button class="btn ghost" data-a="print">${ico('print', 16)} Print</button></div>
     </div>`;
   }
   function draw() {
@@ -50,17 +52,20 @@ export async function render(root) {
     if (!o) return;
     if (b.dataset.a === 'print') return printHTML(kotHTML(o));
     b.disabled = true;
-    state.own.add(`${id}:served`);
-    const { error } = await sb.from('orders').update({ status: 'served', served_at: new Date().toISOString() }).eq('id', id);
-    if (error) { state.own.delete(`${id}:served`); b.disabled = false; return toast('Could not update: ' + errMsg(error), 'err'); }
-    toast(`${billNo(o.bill_no)} marked as served ✓`);
+    const undo = b.dataset.a === 'undo';
+    const stamp = new Date().toISOString();
+    // tell this device not to alert itself about its own change
+    state.own.add(undo ? `${id}:pending` : `${id}:served:${new Date(stamp).getTime()}`);
+    const patch = undo ? { status: 'pending', served_at: null } : { status: 'served', served_at: stamp };
+    const { error } = await sb.from('orders').update(patch).eq('id', id);
+    if (error) { b.disabled = false; return toast('Could not update: ' + errMsg(error), 'err'); }
+    toast(undo ? `${billNo(o.bill_no)} moved back to the kitchen` : `${billNo(o.bill_no)} marked as served ✓`);
     window.dispatchEvent(new Event('orders-changed'));
     load();
   };
 
-  const onChange = () => load();
-  window.addEventListener('orders-changed', onChange);
+  const offLive = onLive(load, 400);
   const t = setInterval(() => { draw(); }, 30000); // keep "x min" fresh
   await load();
-  return () => { window.removeEventListener('orders-changed', onChange); clearInterval(t); root.onclick = null; };
+  return () => { offLive(); clearInterval(t); root.onclick = null; };
 }

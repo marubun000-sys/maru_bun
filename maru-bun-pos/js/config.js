@@ -1,6 +1,6 @@
 // ==========================================================
 //  Supabase Dashboard > Project Settings > API
-//  1) Project URL      -> SUPABASE_URL
+//  1) Project URL      -> SUPABASE_URL   (only https://xxxx.supabase.co , nothing after .co)
 //  2) anon public key  -> SUPABASE_ANON_KEY   (this key is safe to be public - data is protected by login + RLS)
 //
 //  Keep both empty = DEMO MODE (data is saved only in this browser, login: admin@demo.lk / admin123, 2-step code: 123456)

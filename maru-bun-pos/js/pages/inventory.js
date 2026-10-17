@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, esc, num, toast, modal, ico, confirmBox, promptModal, errMsg } from '../utils.js';
+import { $, esc, num, toast, modal, ico, confirmBox, promptModal, errMsg, onLive } from '../utils.js';
 
 export async function render(root) {
   let rows = [];
@@ -16,7 +16,7 @@ export async function render(root) {
     const nLow = rows.filter(low).length;
     root.innerHTML = `<div class="page-head"><h1>Inventory</h1>${nLow ? `<span class="pill bad">${nLow} running low</span>` : ''}<div class="spacer"></div>
       <button class="btn" data-a="add">${ico('plus')} Add ingredient</button></div>
-      <p class="muted small" style="margin-top:-6px">Track raw materials (buns, cheese, chicken…). Use <b>Adjust</b> to add new stock or record usage / waste.</p>
+      <p class="muted small" style="margin-top:-6px">Track raw materials (buns, cheese, chicken…). Use Adjust to add new stock or record usage / waste.</p>
       <div class="tbl-wrap"><table><thead><tr><th>Ingredient</th><th class="r">In stock</th><th>Unit</th><th class="r">Alert level</th><th>Status</th><th></th></tr></thead><tbody>
       ${rows.map(r => `<tr><td><b>${esc(r.name)}</b></td><td class="r">${num(r.qty)}</td><td>${esc(r.unit)}</td><td class="r">${num(r.low_level)}</td>
         <td>${num(r.qty) <= 0 ? '<span class="pill bad">Empty</span>' : low(r) ? '<span class="pill warn">Low</span>' : '<span class="pill ok">OK</span>'}</td>
@@ -57,5 +57,6 @@ export async function render(root) {
   });
 
   await load();
-  return () => { root.onclick = null; };
+  const offLive = onLive(() => { if (!document.querySelector('.modal-wrap')) load().catch(() => {}); }, 1500);
+  return () => { root.onclick = null; offLive(); };
 }

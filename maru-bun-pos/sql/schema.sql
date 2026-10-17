@@ -108,11 +108,16 @@ end $$;
 --   create policy "staff all" on public.orders for all to authenticated
 --     using ((auth.jwt() ->> 'aal') = 'aal2') with check ((auth.jwt() ->> 'aal') = 'aal2');
 
--- ---------- Live updates for the Kitchen Display ----------
+-- ---------- Live updates: Kitchen Display + every device refreshes by itself ----------
 do $$
+declare t text;
 begin
-  alter publication supabase_realtime add table public.orders;
-exception when duplicate_object then null;
+  foreach t in array array['orders','items','addons','categories','inventory','settings'] loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    exception when duplicate_object then null;
+    end;
+  end loop;
 end $$;
 
 -- ---------- Sample menu (edit / delete from Menu Management) ----------

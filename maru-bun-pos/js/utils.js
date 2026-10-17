@@ -8,19 +8,26 @@ export const fmt = n => r2(num(n)).toLocaleString('en-US', { minimumFractionDigi
 export const money = n => 'LKR ' + fmt(n);
 export const billNo = n => 'MB-' + String(n || 0).padStart(5, '0');
 export const pad = n => String(n).padStart(2, '0');
-export const dstr = d => { d = new Date(d); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-export const tstr = d => { d = new Date(d); let h = d.getHours(); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${pad(d.getMinutes())} ${ap}`; };
+// ---------- Sri Lanka time (Asia/Colombo = UTC+5:30, no daylight saving) ----------
+// Everything (bill times, "today", "this month", midnight roll-over) uses Sri Lanka time,
+// no matter what time zone the phone / computer is set to.
+const SL = 5.5 * 3600e3;
+const sl = d => new Date(new Date(d).getTime() + SL); // read with getUTC* methods
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const dstr = d => { const x = sl(d); return `${x.getUTCFullYear()}-${pad(x.getUTCMonth() + 1)}-${pad(x.getUTCDate())}`; };
+export const tstr = d => { const x = sl(d); let h = x.getUTCHours(); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${pad(x.getUTCMinutes())} ${ap}`; };
 export const dtstr = d => dstr(d) + ' ' + tstr(d);
-export const ymOf = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
-export const dayRange = (d = new Date()) => {
-  const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const b = new Date(a); b.setDate(b.getDate() + 1);
-  return [a.toISOString(), b.toISOString()];
-};
-export const monthRange = ym => {
-  const [y, m] = ym.split('-').map(Number);
-  return [new Date(y, m - 1, 1).toISOString(), new Date(y, m, 1).toISOString()];
-};
+export const nowLabel = () => { const x = sl(Date.now()); return `${DAYS[x.getUTCDay()]}, ${x.getUTCDate()} ${MONTHS[x.getUTCMonth()]} ${x.getUTCFullYear()} · ${tstr(Date.now())}`; };
+export const weekday = d => DAYS[sl(d).getUTCDay()];
+export const ymOf = (d = new Date()) => dstr(d).slice(0, 7);
+export const dayRangeStr = s => { const [y, m, d] = s.split('-').map(Number); const a = Date.UTC(y, m - 1, d) - SL; return [new Date(a).toISOString(), new Date(a + 864e5).toISOString()]; };
+export const dayRange = (d = new Date()) => dayRangeStr(dstr(d));
+export const monthRange = ym => { const [y, m] = ym.split('-').map(Number); return [new Date(Date.UTC(y, m - 1, 1) - SL).toISOString(), new Date(Date.UTC(y, m, 1) - SL).toISOString()]; };
+// stable key for "order X is in state Y" (used to avoid alerting twice / alerting ourselves)
+export const okey = o => `${o.id}:${o.status}${o.status === 'served' && o.served_at ? ':' + new Date(o.served_at).getTime() : ''}`;
+// an order saved straight as 'served' (never sent to the kitchen) has served_at == created_at exactly
+export const noKitchen = o => !!o.served_at && new Date(o.served_at).getTime() === new Date(o.created_at).getTime();
 // Sri Lankan numbers -> international format for wa.me (0771234567 -> 94771234567)
 export function normPhone(p) {
   let d = String(p || '').replace(/\D/g, '');
@@ -54,18 +61,33 @@ const ICONS = {
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
   x: '<path d="M18 6L6 18M6 6l12 12"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
 };
 export const ico = (n, size = 18) => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 
 // ---------- toast + sound ----------
-export function toast(msg, type = 'ok', ms = 3500) {
+export function toast(msg, type = 'ok', ms = 3500, opts = {}) {
   const box = document.getElementById('toasts');
   const t = document.createElement('div');
   t.className = 'toast ' + type;
-  t.textContent = msg;
-  while (box.children.length >= 4) box.firstChild.remove();
+  const sp = document.createElement('span'); sp.textContent = msg; t.appendChild(sp);
+  const gone = () => { t.classList.add('out'); setTimeout(() => t.remove(), 300); if (t._rep) clearTimeout(t._rep); };
+  while (box.children.length >= 5) box.firstChild.remove();
   box.appendChild(t);
-  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, ms);
+  if (opts.sticky) {                       // stays until someone taps it; replays the sound once more after 10 s
+    t.classList.add('sticky'); t.title = 'Tap to dismiss'; t.onclick = gone;
+    if (opts.repeat) t._rep = setTimeout(() => { if (t.isConnected) opts.repeat(); }, 10000);
+  } else setTimeout(gone, ms);
+  return t;
+}
+// run fn when something changed anywhere (realtime event or periodic tick) - debounced
+export function onLive(fn, wait = 700) {
+  let t; const ev = ['orders-changed', 'data-changed'];
+  const h = () => { clearTimeout(t); t = setTimeout(fn, wait); };
+  ev.forEach(e => window.addEventListener(e, h));
+  return () => { clearTimeout(t); ev.forEach(e => window.removeEventListener(e, h)); };
 }
 let ac;
 export function beep(kind = 'new') {
@@ -77,7 +99,7 @@ export function beep(kind = 'new') {
       const o = ac.createOscillator(), g = ac.createGain(), at = ac.currentTime + t;
       o.type = 'sine'; o.frequency.value = f;
       g.gain.setValueAtTime(0.0001, at);
-      g.gain.exponentialRampToValueAtTime(0.4, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.7, at + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, at + 0.17);
       o.connect(g); g.connect(ac.destination);
       o.start(at); o.stop(at + 0.2);

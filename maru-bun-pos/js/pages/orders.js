@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRange, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg } from '../utils.js';
+import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive } from '../utils.js';
 import { showBillModal, typeLabel, payLabel } from '../bill.js';
 
 export async function render(root) {
@@ -31,7 +31,7 @@ export async function render(root) {
       if (mode === 'month' && ym === nowYm) view = cur;
       else if (mode === 'today') view = cur.filter(o => dstr(o.created_at) === dstr(new Date()));
       else if (mode === 'month') view = await fetchOrders(sb, ...monthRange(ym));
-      else view = await fetchOrders(sb, ...dayRange(new Date(day + 'T00:00:00')));
+      else view = await fetchOrders(sb, ...dayRangeStr(day));
     } catch (e) { $('#rows').innerHTML = `<tr><td colspan="7"><div class="err">${esc(errMsg(e))}</div></td></tr>`; return; }
     draw();
   }
@@ -89,8 +89,7 @@ export async function render(root) {
     ]);
   };
 
-  const onChange = () => load();
-  window.addEventListener('orders-changed', onChange);
+  const offLive = onLive(() => load(), 1000);
   await load();
-  return () => window.removeEventListener('orders-changed', onChange);
+  return () => offLive();
 }

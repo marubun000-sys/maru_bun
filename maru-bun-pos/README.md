@@ -67,3 +67,12 @@ git push -u origin main
 * *Invalid login credentials* → create the user in Supabase (step 1.3).
 * *Kitchen doesn't update instantly* → the app also re-checks every 10 s, so it still works; make sure the SQL ran fully (it enables realtime on `orders`).
 * *Can't turn on 2-step* → enable TOTP in Supabase Authentication → Multi-Factor.
+
+## Added later
+* **POS options before *Place Order*:** *Send to kitchen* (untick = bill is saved but never shown in the Kitchen Display), *Print kitchen slip*, *Print customer bill*. Your choice is remembered on that device.
+* **Kitchen Display:** *Mark Served* can be undone with **Undo**. Counter devices get a sound + popup when an order is served; kitchen devices get a repeating sound + popup for every new order. Set each device's role in the top bar (**Device: Counter / Kitchen / Both**). Tap anywhere once so the browser allows sound.
+* **Bills:** printed bill and the WhatsApp *picture* carry the logo. WhatsApp text cannot carry a picture, so use **WhatsApp (with logo picture)** – on a phone it opens the share sheet, on a computer the picture is saved and the chat opens so you can attach it.
+* **Your software company line:** open `js/brand.js`, fill `SOFTWARE_NAME` and `SOFTWARE_SITE`. It then appears at the bottom of every printed bill, WhatsApp text and bill picture. Leave empty to hide.
+* **Dark / Light** and **English / සිංහල** buttons are in the top bar (and on the login page). Bills stay in English for customers.
+* **Sri Lanka time:** all dates, "today" and "this month" use Asia/Colombo time whatever the device's own time zone is. At 12:00 midnight the screens roll over to the new day by themselves.
+* **Many devices:** orders, stock, menu, settings and the dashboard refresh on every device automatically (live, with a 10–20 s safety refresh). If you made the database with the very first `schema.sql`, run `sql/realtime-all.sql` once.

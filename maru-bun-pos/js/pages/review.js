@@ -5,7 +5,7 @@ export async function render(root) {
   const link = () => state.settings.review_link || '';
   root.innerHTML = `<div class="page-head"><h1>Google Review</h1></div>
     <div class="card" style="max-width:640px">
-      <p class="muted" style="margin-top:0">Paste your shop's Google review link here. It is added at the bottom of every bill sent on <b>WhatsApp</b> so customers can rate you. Printed bills do <b>not</b> show it.</p>
+      <p class="muted" style="margin-top:0">Paste your shop's Google review link here. It is added at the bottom of every bill sent on WhatsApp so customers can rate you. Printed bills do not show it.</p>
       <label>Google review link<input id="lnk" type="url" placeholder="https://g.page/r/XXXXXXXX/review" value="${esc(link())}"></label>
       <div class="row wrap">
         <button class="btn" id="save">Save link</button>
@@ -17,8 +17,8 @@ export async function render(root) {
       <h2>How to get the link</h2>
       <ol class="muted" style="padding-left:18px;margin:0">
         <li>Open Google Maps and find your business profile (or open the Google Business Profile app).</li>
-        <li>Tap <b>Share review form</b> / <b>Get more reviews</b>.</li>
-        <li>Copy the link (looks like <code>https://g.page/r/…/review</code>) and paste it above.</li>
+        <li>Tap Share review form / Get more reviews.</li>
+        <li>Copy the link (it looks like https://g.page/r/…/review) and paste it above.</li>
       </ol>
       <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
       <h2>Preview of the WhatsApp bill ending</h2>
