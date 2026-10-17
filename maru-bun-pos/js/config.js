@@ -5,5 +5,5 @@
 //
 //  Keep both empty = DEMO MODE (data is saved only in this browser, login: admin@demo.lk / admin123, 2-step code: 123456)
 // ==========================================================
-export const SUPABASE_URL = 'https://venelogtmyqluhjymnjb.supabase.co/rest/v1/';
+export const SUPABASE_URL = 'https://venelogtmyqluhjymnjb.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlbmVsb2d0bXlxbHVoanltbmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxOTg0ODIsImV4cCI6MjEwNzc3NDQ4Mn0.lbEQYTlhCLpY5DM54TwzWoofN89_dIhLJu-qa3ISslg';
