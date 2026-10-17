@@ -1,0 +1,96 @@
+import { sb } from '../sb.js';
+import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRange, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg } from '../utils.js';
+import { showBillModal, typeLabel, payLabel } from '../bill.js';
+
+export async function render(root) {
+  let mode = 'today', ym = ymOf(), day = dstr(new Date()), search = '', ftype = '', fpay = '';
+  let view = [], cur = [];
+
+  root.innerHTML = `
+    <div class="grid-cards" id="cards"></div>
+    <div class="toolbar">
+      <div class="seg" id="seg"><button data-m="today" class="on">Today</button><button data-m="month">Month</button><button data-m="date">Pick date</button></div>
+      <input type="month" id="ym" value="${ym}" hidden>
+      <input type="date" id="dt" value="${day}" hidden>
+      <input id="s" placeholder="Search bill no / name / phone">
+      <select id="ft"><option value="">All types</option><option value="dine_in">Dine-in</option><option value="takeaway">Takeaway</option></select>
+      <select id="fp"><option value="">All payments</option><option value="cash">Cash</option><option value="card">Card</option><option value="bank">Bank Transfer</option><option value="qr">QR Pay</option></select>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="csv">Export CSV</button>
+    </div>
+    <div id="daily"></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Bill</th><th>Date & time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Status</th><th class="r">Total (LKR)</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+
+  const sum = arr => arr.reduce((n, o) => n + Number(o.total || 0), 0);
+
+  async function load() {
+    $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+    try {
+      const nowYm = ymOf();
+      cur = await fetchOrders(sb, ...monthRange(nowYm));
+      if (mode === 'month' && ym === nowYm) view = cur;
+      else if (mode === 'today') view = cur.filter(o => dstr(o.created_at) === dstr(new Date()));
+      else if (mode === 'month') view = await fetchOrders(sb, ...monthRange(ym));
+      else view = await fetchOrders(sb, ...dayRange(new Date(day + 'T00:00:00')));
+    } catch (e) { $('#rows').innerHTML = `<tr><td colspan="7"><div class="err">${esc(errMsg(e))}</div></td></tr>`; return; }
+    draw();
+  }
+
+  function filtered() {
+    const q = search.toLowerCase();
+    return view.filter(o => (!ftype || o.order_type === ftype) && (!fpay || o.payment_method === fpay) &&
+      (!q || billNo(o.bill_no).toLowerCase().includes(q) || String(o.bill_no) === q || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_phone || '').includes(q)));
+  }
+
+  function draw() {
+    const todayList = cur.filter(o => dstr(o.created_at) === dstr(new Date()));
+    const list = filtered();
+    $('#cards').innerHTML = `
+      <div class="stat gold"><div class="k">Today's sale</div><div class="v">${money(sum(todayList))}</div><div class="s">${todayList.length} bills</div></div>
+      <div class="stat gold"><div class="k">This month's sale</div><div class="v">${money(sum(cur))}</div><div class="s">${cur.length} bills</div></div>
+      <div class="stat"><div class="k">Showing</div><div class="v">${money(sum(list))}</div><div class="s">${list.length} bills${list.length ? ' · avg ' + fmt(sum(list) / list.length) : ''}</div></div>
+      <div class="stat"><div class="k">Dine-in / Takeaway</div><div class="v">${list.filter(o => o.order_type === 'dine_in').length} / ${list.filter(o => o.order_type === 'takeaway').length}</div><div class="s">in this view</div></div>`;
+
+    // daily breakdown for month view
+    if (mode === 'month') {
+      const by = {};
+      view.forEach(o => { const k = dstr(o.created_at); (by[k] = by[k] || { n: 0, t: 0 }); by[k].n++; by[k].t += Number(o.total || 0); });
+      const days = Object.keys(by).sort().reverse();
+      $('#daily').innerHTML = days.length ? `<details class="card" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">Daily sales for ${ym} (${days.length} days)</summary>
+        <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Date</th><th class="r">Bills</th><th class="r">Sales (LKR)</th></tr></thead><tbody>
+        ${days.map(d => `<tr><td>${d}</td><td class="r">${by[d].n}</td><td class="r">${fmt(by[d].t)}</td></tr>`).join('')}</tbody></table></div></details>` : '';
+    } else $('#daily').innerHTML = '';
+
+    $('#rows').innerHTML = list.length ? list.map(o => `<tr class="click" data-id="${o.id}">
+      <td><b>${billNo(o.bill_no)}</b></td><td>${dtstr(o.created_at)}</td>
+      <td>${esc(o.customer_name || '—')}${o.customer_phone ? `<div class="muted small">${esc(o.customer_phone)}</div>` : ''}</td>
+      <td><span class="pill ${o.order_type === 'takeaway' ? 'info' : ''}">${typeLabel(o.order_type)}</span></td>
+      <td>${payLabel(o.payment_method)}</td>
+      <td><span class="pill ${o.status === 'served' ? 'ok' : 'warn'}">${o.status === 'served' ? 'Served' : 'In kitchen'}</span></td>
+      <td class="r"><b>${fmt(o.total)}</b></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No bills found</td></tr>';
+  }
+
+  $('#seg', root).onclick = e => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    mode = b.dataset.m; $$('#seg button', root).forEach(x => x.classList.toggle('on', x === b));
+    $('#ym').hidden = mode !== 'month'; $('#dt').hidden = mode !== 'date'; load();
+  };
+  $('#ym', root).onchange = e => { if (e.target.value) { ym = e.target.value; load(); } };
+  $('#dt', root).onchange = e => { if (e.target.value) { day = e.target.value; load(); } };
+  $('#s', root).oninput = e => { search = e.target.value.trim(); draw(); };
+  $('#ft', root).onchange = e => { ftype = e.target.value; draw(); };
+  $('#fp', root).onchange = e => { fpay = e.target.value; draw(); };
+  $('#rows', root).onclick = e => { const tr = e.target.closest('tr[data-id]'); if (!tr) return; const o = view.find(x => x.id === tr.dataset.id); if (o) showBillModal(o); };
+  $('#csv', root).onclick = () => {
+    const list = filtered(); if (!list.length) return toast('Nothing to export', 'err');
+    downloadCSV(`bills-${mode === 'month' ? ym : mode === 'date' ? day : dstr(new Date())}.csv`, [
+      ['Bill', 'Date', 'Time', 'Customer', 'Phone', 'Type', 'Table', 'Payment', 'Subtotal', 'Discount', 'Service charge', 'Total', 'Cashier', 'Status', 'Items'],
+      ...list.map(o => [billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.cashier, o.status, (o.items || []).map(i => `${i.qty}x ${i.name}`).join('; ')]),
+    ]);
+  };
+
+  const onChange = () => load();
+  window.addEventListener('orders-changed', onChange);
+  await load();
+  return () => window.removeEventListener('orders-changed', onChange);
+}
