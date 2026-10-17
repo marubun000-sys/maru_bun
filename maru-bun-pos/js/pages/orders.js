@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive } from '../utils.js';
+import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive, lineRows } from '../utils.js';
 import { showBillModal, typeLabel, payLabel } from '../bill.js';
 
 export async function render(root) {
@@ -19,12 +19,12 @@ export async function render(root) {
       <button class="btn ghost" id="csv">Export CSV</button>
     </div>
     <div id="daily"></div>
-    <div class="tbl-wrap"><table><thead><tr><th>Bill</th><th>Date & time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Status</th><th class="r">Total (LKR)</th></tr></thead><tbody id="rows"></tbody></table></div>`;
+    <div class="tbl-wrap"><table><thead><tr><th>Token</th><th>Bill</th><th>Date & time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Status</th><th class="r">Total (LKR)</th></tr></thead><tbody id="rows"></tbody></table></div>`;
 
   const sum = arr => arr.reduce((n, o) => n + Number(o.total || 0), 0);
 
   async function load() {
-    $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Loading…</td></tr>';
+    $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Loading…</td></tr>';
     try {
       const nowYm = ymOf();
       cur = await fetchOrders(sb, ...monthRange(nowYm));
@@ -32,14 +32,14 @@ export async function render(root) {
       else if (mode === 'today') view = cur.filter(o => dstr(o.created_at) === dstr(new Date()));
       else if (mode === 'month') view = await fetchOrders(sb, ...monthRange(ym));
       else view = await fetchOrders(sb, ...dayRangeStr(day));
-    } catch (e) { $('#rows').innerHTML = `<tr><td colspan="7"><div class="err">${esc(errMsg(e))}</div></td></tr>`; return; }
+    } catch (e) { $('#rows').innerHTML = `<tr><td colspan="8"><div class="err">${esc(errMsg(e))}</div></td></tr>`; return; }
     draw();
   }
 
   function filtered() {
     const q = search.toLowerCase();
     return view.filter(o => (!ftype || o.order_type === ftype) && (!fpay || o.payment_method === fpay) &&
-      (!q || billNo(o.bill_no).toLowerCase().includes(q) || String(o.bill_no) === q || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_phone || '').includes(q)));
+      (!q || billNo(o.bill_no).toLowerCase().includes(q) || String(o.bill_no) === q || (o.token_no && String(o.token_no) === q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_phone || '').includes(q)));
   }
 
   function draw() {
@@ -62,12 +62,12 @@ export async function render(root) {
     } else $('#daily').innerHTML = '';
 
     $('#rows').innerHTML = list.length ? list.map(o => `<tr class="click" data-id="${o.id}">
-      <td><b>${billNo(o.bill_no)}</b></td><td>${dtstr(o.created_at)}</td>
+      <td>${o.token_no ? '<b>#' + o.token_no + '</b>' : '—'}</td><td><b>${billNo(o.bill_no)}</b></td><td>${dtstr(o.created_at)}</td>
       <td>${esc(o.customer_name || '—')}${o.customer_phone ? `<div class="muted small">${esc(o.customer_phone)}</div>` : ''}</td>
       <td><span class="pill ${o.order_type === 'takeaway' ? 'info' : ''}">${typeLabel(o.order_type)}</span></td>
       <td>${payLabel(o.payment_method)}</td>
       <td><span class="pill ${o.status === 'served' ? 'ok' : 'warn'}">${o.status === 'served' ? 'Served' : 'In kitchen'}</span></td>
-      <td class="r"><b>${fmt(o.total)}</b></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No bills found</td></tr>';
+      <td class="r"><b>${fmt(o.total)}</b></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No bills found</td></tr>';
   }
 
   $('#seg', root).onclick = e => {
@@ -84,8 +84,8 @@ export async function render(root) {
   $('#csv', root).onclick = () => {
     const list = filtered(); if (!list.length) return toast('Nothing to export', 'err');
     downloadCSV(`bills-${mode === 'month' ? ym : mode === 'date' ? day : dstr(new Date())}.csv`, [
-      ['Bill', 'Date', 'Time', 'Customer', 'Phone', 'Type', 'Table', 'Payment', 'Subtotal', 'Discount', 'Service charge', 'Total', 'Cashier', 'Status', 'Items'],
-      ...list.map(o => [billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.cashier, o.status, (o.items || []).map(i => `${i.qty}x ${i.name}`).join('; ')]),
+      ['Token', 'Bill', 'Date', 'Time', 'Customer', 'Phone', 'Type', 'Table', 'Payment', 'Subtotal', 'Discount', 'Service charge', 'Total', 'Cashier', 'Status', 'Items'],
+      ...list.map(o => [o.token_no || '', billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.cashier, o.status, (o.items || []).map(i => { const r = lineRows(i); return `${r.qty}x ${r.name} @${r.unit}` + r.extras.map(e => ` +${e.qty}x ${e.name}`).join(''); }).join('; ')]),
     ]);
   };
 

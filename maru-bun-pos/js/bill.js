@@ -1,4 +1,4 @@
-import { esc, fmt, money, billNo, dtstr, normPhone, modal, ico, toast, $ } from './utils.js';
+import { esc, fmt, money, billNo, dtstr, normPhone, modal, ico, toast, $, lineRows } from './utils.js';
 import { state } from './state.js';
 import { SOFTWARE_NAME, SOFTWARE_SITE } from './brand.js';
 
@@ -12,11 +12,12 @@ const siteText = () => String(SOFTWARE_SITE || '').replace(/^https?:\/\//i, '').
 
 // ---------- customer bill (print + preview). NO review link here, on purpose ----------
 export function billHTML(o, s = state.settings) {
-  const items = (o.items || []).map(l => `
+  const items = (o.items || []).map(l => { const r = lineRows(l); return `
     <div class="r-item">
-      <div class="r-line"><span>${l.qty} × ${esc(l.name)}</span><span>${fmt(l.unit * l.qty)}</span></div>
-      ${(l.addons || []).map(a => `<div class="r-sub">+ ${esc(a.name)} (${fmt(a.price)})</div>`).join('')}
-    </div>`).join('');
+      <div class="r-iname">${esc(r.name)}</div>
+      <div class="r-line"><span>${r.qty} × ${fmt(r.unit)}</span><span>${fmt(r.total)}</span></div>
+      ${r.extras.map(e => `<div class="r-sub">+ ${esc(e.name)}</div><div class="r-line r-sub2"><span>${e.qty} × ${fmt(e.unit)}</span><span>${fmt(e.total)}</span></div>`).join('')}
+    </div>`; }).join('');
   const row = (a, b, cls = '') => `<div class="r-line ${cls}"><span>${a}</span><span>${b}</span></div>`;
   const soft = (SOFTWARE_NAME || SOFTWARE_SITE) ? `<div class="r-soft">${SOFTWARE_NAME ? 'Software by ' + esc(SOFTWARE_NAME) : ''}${SOFTWARE_NAME && SOFTWARE_SITE ? '<br>' : ''}${esc(siteText())}</div>` : '';
   return `<div class="receipt">
@@ -28,11 +29,12 @@ export function billHTML(o, s = state.settings) {
       ${s.phone ? `<div>Tel: ${esc(s.phone)}</div>` : ''}
     </div>
     <div class="r-hr"></div>
+    ${o.token_no ? `<div class="r-token">TOKEN NO: ${o.token_no}</div>` : ''}
     <div class="r-meta">
       ${row('Bill No', `<b>${billNo(o.bill_no)}</b>`)}
       ${row('Date', dtstr(o.created_at))}
       ${row('Type', typeLabel(o.order_type))}
-      ${o.table_no ? row('Table/Token', esc(o.table_no)) : ''}
+      ${o.table_no ? row('Table', esc(o.table_no)) : ''}
       ${o.customer_name ? row('Customer', esc(o.customer_name)) : ''}
       ${o.cashier ? row('Cashier', esc(o.cashier)) : ''}
     </div>
@@ -55,14 +57,15 @@ export function billHTML(o, s = state.settings) {
 
 // ---------- kitchen slip ----------
 export function kotHTML(o) {
-  const items = (o.items || []).map(l => `
-    <div class="k-item"><b>${l.qty} × ${esc(l.name)}</b>
-    ${(l.addons || []).map(a => `<div class="k-sub">+ ${esc(a.name)}</div>`).join('')}</div>`).join('');
+  const items = (o.items || []).map(l => { const r = lineRows(l); return `
+    <div class="k-item"><b>${r.qty} × ${esc(r.name)}</b>
+    ${r.extras.map(e => `<div class="k-sub">+ ${e.qty} × ${esc(e.name)}</div>`).join('')}</div>`; }).join('');
   return `<div class="receipt kot">
     <div class="r-head"><div class="r-name">KITCHEN ORDER</div></div>
     <div class="r-hr bold"></div>
+    ${o.token_no ? `<div class="r-token">TOKEN NO: ${o.token_no}</div>` : ''}
     <div class="r-line r-total"><span>${billNo(o.bill_no)}</span><span>${typeLabel(o.order_type).toUpperCase()}</span></div>
-    ${o.table_no ? `<div class="r-line"><span>Table/Token</span><b>${esc(o.table_no)}</b></div>` : ''}
+    ${o.table_no ? `<div class="r-line"><span>Table</span><b>${esc(o.table_no)}</b></div>` : ''}
     ${o.customer_name ? `<div class="r-line"><span>Customer</span><span>${esc(o.customer_name)}</span></div>` : ''}
     <div class="r-line"><span>Time</span><span>${dtstr(o.created_at)}</span></div>
     <div class="r-hr bold"></div>
@@ -80,12 +83,15 @@ export function billText(o, s = state.settings) {
   L.push('');
   L.push(`🧾 Bill: *${billNo(o.bill_no)}*`);
   L.push(`📅 ${dtstr(o.created_at)}`);
-  L.push(`🍽️ ${typeLabel(o.order_type)}${o.table_no ? ' · ' + o.table_no : ''}`);
+  if (o.token_no) L.push(`🎫 Token No: *${o.token_no}*`);
+  L.push(`🍽️ ${typeLabel(o.order_type)}${o.table_no ? ' · Table ' + o.table_no : ''}`);
   if (o.customer_name) L.push(`👤 ${o.customer_name}`);
   L.push('--------------------------');
   (o.items || []).forEach(l => {
-    L.push(`${l.qty} × ${l.name} — ${fmt(l.unit * l.qty)}`);
-    (l.addons || []).forEach(a => L.push(`    + ${a.name} (${fmt(a.price)})`));
+    const r = lineRows(l);
+    L.push(`${r.name}`);
+    L.push(`   ${r.qty} × ${fmt(r.unit)} = ${fmt(r.total)}`);
+    r.extras.forEach(e => L.push(`   + ${e.name}: ${e.qty} × ${fmt(e.unit)} = ${fmt(e.total)}`));
   });
   L.push('--------------------------');
   L.push(`Subtotal: ${fmt(o.subtotal)}`);
@@ -126,13 +132,19 @@ export async function billImage(o, s = state.settings, { review = true } = {}) {
   wrap(s.address || '', `400 17px ${FAM}`, W - 2 * P).forEach(t => add('center', { t, f: `400 17px ${FAM}`, h: 24 }));
   if (s.phone) add('center', { t: 'Tel: ' + s.phone, f: `400 17px ${FAM}`, h: 24 });
   add('hr');
-  const pair = (l, r, b = false, big = false) => add('pair', { l, r, f: `${b ? 600 : 400} ${big ? 28 : 20}px ${FAM}`, h: big ? 40 : 28 });
+  const pair = (l, r, b = false, big = false, indent = 0) => add('pair', { l, r, f: `${b ? 600 : 400} ${big ? 28 : 20}px ${FAM}`, h: big ? 40 : 28, indent });
+  if (o.token_no) add('center', { t: 'TOKEN NO: ' + o.token_no, f: `700 34px ${FAM}`, h: 52 });
   pair('Bill No', billNo(o.bill_no), true); pair('Date', dtstr(o.created_at)); pair('Type', typeLabel(o.order_type));
-  if (o.table_no) pair('Table/Token', o.table_no);
+  if (o.table_no) pair('Table', o.table_no);
   if (o.customer_name) pair('Customer', o.customer_name);
   if (o.cashier) pair('Cashier', o.cashier);
   add('hr');
-  (o.items || []).forEach(l => { pair(`${l.qty} × ${l.name}`, fmt(l.unit * l.qty), true); (l.addons || []).forEach(a => add('sub', { t: `+ ${a.name} (${fmt(a.price)})`, f: `400 16px ${FAM}`, h: 22 })); });
+  (o.items || []).forEach(l => {
+    const r = lineRows(l);
+    add('left', { t: r.name, f: `600 21px ${FAM}`, h: 30 });
+    pair(`${r.qty} × ${fmt(r.unit)}`, fmt(r.total), false, false, 22);
+    r.extras.forEach(e => { add('sub', { t: `+ ${e.name}`, f: `400 17px ${FAM}`, h: 24 }); pair(`${e.qty} × ${fmt(e.unit)}`, fmt(e.total), false, false, 44); });
+  });
   add('hr');
   pair('Subtotal', fmt(o.subtotal));
   if (o.discount > 0) pair('Discount' + (o.discount_label ? ` (${o.discount_label})` : ''), '- ' + fmt(o.discount));
@@ -158,8 +170,9 @@ export async function billImage(o, s = state.settings, { review = true } = {}) {
     if (op.type === 'hr') { y += 8; ctx.strokeStyle = '#000'; ctx.lineWidth = op.bold ? 3 : 1; ctx.setLineDash(op.bold ? [] : [5, 4]); ctx.beginPath(); ctx.moveTo(P, y); ctx.lineTo(W - P, y); ctx.stroke(); y += 8; continue; }
     ctx.font = op.f; ctx.fillStyle = op.muted ? '#555' : op.link ? '#0a58ca' : '#000';
     if (op.type === 'center') { ctx.textAlign = 'center'; ctx.fillText(op.t, W / 2, y + op.h / 2); }
+    else if (op.type === 'left') { ctx.textAlign = 'left'; ctx.fillText(op.t, P, y + op.h / 2); }
     else if (op.type === 'sub') { ctx.textAlign = 'left'; ctx.fillStyle = '#333'; ctx.fillText(op.t, P + 22, y + op.h / 2); }
-    else { ctx.textAlign = 'left'; ctx.fillText(op.l, P, y + op.h / 2); ctx.textAlign = 'right'; ctx.fillText(op.r, W - P, y + op.h / 2); }
+    else { ctx.textAlign = 'left'; ctx.fillText(op.l, P + (op.indent || 0), y + op.h / 2); ctx.textAlign = 'right'; ctx.fillText(op.r, W - P, y + op.h / 2); }
     y += op.h;
   }
   return new Promise(res => c.toBlob(res, 'image/png'));

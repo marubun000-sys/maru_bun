@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive } from '../utils.js';
+import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal } from '../utils.js';
 
 export async function render(root) {
   let range = 'month', lastSig = '', busy = false, dead = false;
@@ -37,7 +37,7 @@ export async function render(root) {
 
       const sold = list => {
         const m = {};
-        list.forEach(o => (o.items || []).forEach(l => { const k = l.item_id || l.name; (m[k] = m[k] || { name: l.name, qty: 0, rev: 0, id: l.item_id }); m[k].qty += l.qty; m[k].rev += l.unit * l.qty; }));
+        list.forEach(o => (o.items || []).forEach(l => { const k = l.item_id || l.name; (m[k] = m[k] || { name: l.name, qty: 0, rev: 0, id: l.item_id }); m[k].qty += l.qty; m[k].rev += lineTotal(l); }));
         return m;
       };
       const soldToday = sold(todayOrders), soldMonth = sold(monthOrders);

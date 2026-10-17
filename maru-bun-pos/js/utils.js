@@ -28,6 +28,16 @@ export const monthRange = ym => { const [y, m] = ym.split('-').map(Number); retu
 export const okey = o => `${o.id}:${o.status}${o.status === 'served' && o.served_at ? ':' + new Date(o.served_at).getTime() : ''}`;
 // an order saved straight as 'served' (never sent to the kitchen) has served_at == created_at exactly
 export const noKitchen = o => !!o.served_at && new Date(o.served_at).getTime() === new Date(o.created_at).getTime();
+// one bill line -> {name, qty, unit, total, extras:[{name,qty,unit,total}]}
+// New orders keep the bun price in `unit` and every extra has its own qty.
+// Old orders stored the extras inside `unit` (per bun) - handled here too so old bills still print right.
+export function lineRows(l) {
+  const ad = l.addons || [], legacy = ad.some(a => a.qty == null);
+  const extras = ad.map(a => { const q = legacy ? num(l.qty) : num(a.qty); return { name: a.name, qty: q, unit: num(a.price), total: r2(q * num(a.price)) }; });
+  const unit = legacy ? r2(num(l.unit) - ad.reduce((n, a) => n + num(a.price), 0)) : num(l.unit);
+  return { name: l.name, qty: num(l.qty), unit, total: r2(unit * num(l.qty)), extras };
+}
+export const lineTotal = l => { const r = lineRows(l); return r2(r.total + r.extras.reduce((n, e) => n + e.total, 0)); };
 // Sri Lankan numbers -> international format for wa.me (0771234567 -> 94771234567)
 export function normPhone(p) {
   let d = String(p || '').replace(/\D/g, '');
@@ -63,6 +73,7 @@ const ICONS = {
   x: '<path d="M18 6L6 18M6 6l12 12"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
 };
 export const ico = (n, size = 18) => `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;

@@ -4,6 +4,7 @@ import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, ds
 import { initI18n, setLang, getLang } from './i18n.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
+import * as customers from './pages/customers.js';
 import * as dashboard from './pages/dashboard.js';
 import * as kitchen from './pages/kitchen.js';
 import * as menu from './pages/menu.js';
@@ -14,6 +15,7 @@ import * as settings from './pages/settings.js';
 const PAGES = [
   { id: 'pos', label: 'POS', icon: 'cart', mod: pos },
   { id: 'orders', label: 'Orders & Billing', icon: 'receipt', mod: orders },
+  { id: 'customers', label: 'Customers', icon: 'users', mod: customers },
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', mod: dashboard },
   { id: 'kitchen', label: 'Kitchen Display', icon: 'kitchen', mod: kitchen },
   { id: 'menu', label: 'Menu Management', icon: 'menu', mod: menu },
@@ -247,7 +249,7 @@ function startLive() {
   } catch (e) { console.warn('realtime unavailable', e); }
   try {                                                      // menu / stock / settings changed on another device
     chan2 = sb.channel('catalog-live');
-    ['items', 'categories', 'addons', 'inventory', 'settings'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
+    ['items', 'categories', 'addons', 'inventory', 'settings', 'customers'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
       window.dispatchEvent(new Event('data-changed'));
       if (t === 'settings') refreshSettings();
     }));

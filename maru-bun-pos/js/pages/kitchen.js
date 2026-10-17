@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
-import { $, esc, billNo, tstr, dayRange, toast, beep, ico, errMsg, onLive, noKitchen } from '../utils.js';
+import { $, esc, billNo, tstr, dayRange, toast, beep, ico, errMsg, onLive, noKitchen, lineRows } from '../utils.js';
 import { kotHTML, printHTML, typeLabel } from '../bill.js';
 
 export async function render(root) {
@@ -33,9 +33,9 @@ export async function render(root) {
   function card(o, done) {
     const m = mins(o);
     return `<div class="kcard ${done ? 'done' : m >= 10 ? 'late' : ''}" data-id="${o.id}">
-      <div class="kh"><b>${billNo(o.bill_no)}</b><span class="pill ${o.order_type === 'takeaway' ? 'info' : 'warn'}">${typeLabel(o.order_type)}${o.table_no ? ' · ' + esc(o.table_no) : ''}</span></div>
+      <div class="kh"><b>${o.token_no ? `<span class="ktok">#${o.token_no}</span> ` : ''}<small class="kbill">${billNo(o.bill_no)}</small></b><span class="pill ${o.order_type === 'takeaway' ? 'info' : 'warn'}">${typeLabel(o.order_type)}${o.table_no ? ' · Table ' + esc(o.table_no) : ''}</span></div>
       <div class="muted small">${tstr(o.created_at)}${done ? '' : ` · <b style="color:${m >= 10 ? 'var(--bad)' : 'var(--text)'}">${m} min</b> waiting`}${o.customer_name ? ' · ' + esc(o.customer_name) : ''}</div>
-      <ul>${(o.items || []).map(l => `<li><b>${l.qty} ×</b> ${esc(l.name)}${(l.addons || []).length ? `<small>+ ${l.addons.map(a => esc(a.name)).join(', ')}</small>` : ''}</li>`).join('')}</ul>
+      <ul>${(o.items || []).map(l => { const r = lineRows(l); return `<li><b>${r.qty} ×</b> ${esc(r.name)}${r.extras.length ? `<small>${r.extras.map(e => `+ ${e.qty} × ${esc(e.name)}`).join('<br>')}</small>` : ''}</li>`; }).join('')}</ul>
       ${o.note ? `<div class="knote">Note: ${esc(o.note)}</div>` : ''}
       <div class="row wrap">${done ? `<button class="btn ghost" data-a="undo">${ico('undo', 16)} Undo</button>` : `<button class="btn" data-a="served">${ico('check', 16)} Mark Served</button>`}<button class="btn ghost" data-a="print">${ico('print', 16)} Print</button></div>
     </div>`;

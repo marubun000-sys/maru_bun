@@ -86,8 +86,16 @@ const SI = {
   'New day started: screens refreshed': 'අලුත් දවසක් ඇරඹුණා: තිර නැවුම් කළා',
 };
 
+Object.assign(SI, {
+  'Customers': 'පාරිභෝගිකයෝ', 'Token': 'ටෝකන්', 'Table no. (optional)': 'මේස අංකය (අවශ්‍ය නම්)',
+  'Visits': 'පැමිණීම්', 'Total spent (LKR)': 'මුළු වියදම (LKR)', 'Last visit': 'අන්තිම පැමිණීම', 'Search name / phone': 'නම / දුරකථන සොයන්න',
+  'No customers yet': 'තවම පාරිභෝගිකයෝ නැත',
+});
+
 // Text that contains numbers / names. [regex, replacement]
 const PATTERNS = [
+  [/^(\d+) customers$/, 'පාරිභෝගිකයන් $1'],
+  [/^Returning customer: (.*)$/, 'නැවත පැමිණි පාරිභෝගිකයා: $1'],
   [/^Place Order · (.*)$/, 'ඇණවුම තබන්න · $1'],
   [/^Service charge \((.*)\)$/, 'සේවා ගාස්තුව ($1)'],
   [/^Stock: (\d+)$/, 'තොගය: $1'],

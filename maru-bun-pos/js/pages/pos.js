@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
-import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive } from '../utils.js';
+import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone } from '../utils.js';
 import { payLabel, showBillModal, printHTML, billHTML, kotHTML } from '../bill.js';
 
 export async function render(root) {
@@ -29,7 +29,7 @@ export async function render(root) {
     </section>
     <aside class="pos-cart">
       <div class="seg" id="typeSeg"><button data-t="dine_in" class="on">Dine-in</button><button data-t="takeaway">Takeaway</button></div>
-      <div class="two"><input id="table" placeholder="Table / Token no."><input id="cname" placeholder="Customer name"></div>
+      <div class="two"><input id="table" placeholder="Table no. (optional)"><input id="cname" placeholder="Customer name"></div>
       <input id="cphone" inputmode="tel" placeholder="Customer WhatsApp (07XXXXXXXX)">
       <div class="lines" id="lines"></div>
       <input id="note" placeholder="Kitchen note (optional)">
@@ -47,13 +47,14 @@ export async function render(root) {
     </aside>
   </div>`;
 
-  const lineKey = (it, ads) => it.id + '|' + ads.map(a => a.id).sort().join(',');
+  let uidn = 0;
+  const lineKey = (it, ads) => ads.length ? it.id + '|x' + (++uidn) : it.id; // lines with extras never merge
   const qtyInCart = id => cart.filter(l => l.item_id === id).reduce((n, l) => n + l.qty, 0);
   const stockLeft = it => (it.track_stock ? it.stock - qtyInCart(it.id) : Infinity);
 
   // ---- calculations ----
   function calc() {
-    const sub = r2(cart.reduce((n, l) => n + l.unit * l.qty, 0));
+    const sub = r2(cart.reduce((n, l) => n + lineTotal(l), 0));
     let disc = discType === 'pct' ? sub * Math.min(100, Math.max(0, discVal)) / 100 : Math.min(Math.max(0, discVal), sub);
     disc = r2(disc);
     const after = sub - disc;
@@ -77,9 +78,11 @@ export async function render(root) {
   function renderLines() {
     $('#lines').innerHTML = cart.length ? cart.map((l, idx) => `<div class="line">
         <div class="nm">${esc(l.name)}</div><div class="pr">${fmt(l.unit * l.qty)}</div>
-        ${l.addons.length ? `<div class="ad">+ ${l.addons.map(a => esc(a.name)).join(', ')}</div>` : ''}
         <div class="qty"><button data-a="dec" data-x="${idx}" aria-label="less">${ico('minus', 14)}</button><b>${l.qty}</b><button data-a="inc" data-x="${idx}" aria-label="more">${ico('plus', 14)}</button>
         <span class="muted small">${fmt(l.unit)} each</span><button class="del" data-a="del" data-x="${idx}" aria-label="remove" style="background:none;border:0;width:auto">${ico('trash', 16)}</button></div>
+        ${l.addons.map((a, j) => `<div class="xrow"><span class="xn">+ ${esc(a.name)} <span class="muted small">${fmt(a.price)}</span></span>
+          <span class="qty xq"><button data-a="xdec" data-x="${idx}" data-j="${j}" aria-label="less">${ico('minus', 12)}</button><b>${a.qty}</b><button data-a="xinc" data-x="${idx}" data-j="${j}" aria-label="more">${ico('plus', 12)}</button></span>
+          <span class="xp">${fmt(a.price * a.qty)}</span></div>`).join('')}
       </div>`).join('') : '<div class="empty small">Tap items to add to the order</div>';
   }
   function renderTotals() {
@@ -120,7 +123,7 @@ export async function render(root) {
     if (it.track_stock && qty > stockLeft(it)) { toast(`Only ${Math.max(0, stockLeft(it))} left in stock for ${it.name}`, 'err'); return false; }
     const key = lineKey(it, ads), ex = cart.find(l => l.key === key);
     if (ex) ex.qty += qty;
-    else cart.push({ key, item_id: it.id, name: it.name, unit: r2(num(it.price) + ads.reduce((n, a) => n + num(a.price), 0)), qty, addons: ads.map(a => ({ id: a.id, name: a.name, price: num(a.price) })) });
+    else cart.push({ key, item_id: it.id, name: it.name, unit: num(it.price), qty, addons: ads.map(a => ({ id: a.id, name: a.name, price: num(a.price), qty: a.qty || 1 })) });
     refreshAll(); return true;
   }
   function pickItem(it) {
@@ -129,15 +132,21 @@ export async function render(root) {
     let q = 1;
     const m = modal(`<h3>${esc(it.name)} <span class="muted">· ${money(it.price)}</span></h3>
       <div class="muted small" style="margin-bottom:8px">Extras</div>
-      <div class="addon-list">${addons.map(a => `<label><span><input type="checkbox" value="${a.id}"> ${esc(a.name)}</span><span>+ ${fmt(a.price)}</span></label>`).join('')}</div>
+      <div class="addon-list">${addons.map(a => `<div class="arow"><span>${esc(a.name)} <span class="muted small">+ ${fmt(a.price)}</span></span>
+        <span class="qty" style="margin:0"><button data-ax="-" data-id="${a.id}" aria-label="less">${ico('minus', 14)}</button><b id="ax-${a.id}">0</b><button data-ax="+" data-id="${a.id}" aria-label="more">${ico('plus', 14)}</button></span></div>`).join('')}</div>
       <div class="row" style="margin-top:10px"><span class="muted">Quantity</span><div class="spacer"></div>
         <div class="qty" style="margin:0"><button id="qm">${ico('minus', 14)}</button><b id="qv">1</b><button id="qp">${ico('plus', 14)}</button></div></div>
       <div class="row end"><button class="btn ghost" id="cx">Cancel</button><button class="btn" id="ok">Add to order</button></div>`);
+    const xq = {};
+    m.el.querySelectorAll('[data-ax]').forEach(b => b.onclick = () => {
+      const id = b.dataset.id; xq[id] = Math.max(0, (xq[id] || 0) + (b.dataset.ax === '+' ? 1 : -1));
+      $('#ax-' + id, m.el).textContent = xq[id];
+    });
     $('#qm', m.el).onclick = () => { q = Math.max(1, q - 1); $('#qv', m.el).textContent = q; };
     $('#qp', m.el).onclick = () => { q++; $('#qv', m.el).textContent = q; };
     $('#cx', m.el).onclick = () => m.close();
     $('#ok', m.el).onclick = () => {
-      const ads = $$('input:checked', m.el).map(c => addons.find(a => a.id === c.value));
+      const ads = addons.filter(a => xq[a.id] > 0).map(a => ({ ...a, qty: xq[a.id] }));
       if (addLine(it, ads, q)) m.close();
     };
   }
@@ -153,7 +162,7 @@ export async function render(root) {
       id: crypto.randomUUID(),
       order_type: orderType, table_no: $('#table').value.trim(), customer_name: $('#cname').value.trim(), customer_phone: $('#cphone').value.trim(),
       note: $('#note').value.trim(),
-      items: cart.map(l => ({ item_id: l.item_id, name: l.name, qty: l.qty, unit: l.unit, addons: l.addons })),
+      items: cart.map(l => ({ item_id: l.item_id, name: l.name, qty: l.qty, unit: l.unit, addons: l.addons.map(a => ({ ...a })) })),
       subtotal: c.sub, discount: c.disc, discount_label: c.disc > 0 ? (discType === 'pct' ? `${discVal}%` : 'LKR') : '',
       service_pct: c.pct, service_charge: c.sc, total: c.total, payment_method: pay,
       cash_received: pay === 'cash' ? got : 0, change_given: pay === 'cash' && got > c.total ? r2(got - c.total) : 0,
@@ -164,6 +173,10 @@ export async function render(root) {
       state.own.add(prefs.kitchen ? `${order.id}:pending` : `${order.id}:served:${new Date(order.served_at).getTime()}`); // set before saving so we don't alert ourselves
       const { data, error } = await sb.from('orders').insert(order).select().single();
       if (error) { state.own.clear(); throw error; }
+      // remember the customer (phone number) in the database - never blocks the sale
+      if (normPhone(order.customer_phone)) {
+        try { await sb.rpc('upsert_customer', { p_phone: normPhone(order.customer_phone), p_name: order.customer_name, p_total: order.total }); } catch (e) { console.warn('customer not saved', e); }
+      }
       // reduce stock
       const used = {};
       cart.forEach(l => { used[l.item_id] = (used[l.item_id] || 0) + l.qty; });
@@ -197,6 +210,12 @@ export async function render(root) {
   $('#lines', R).onclick = e => {
     const b = e.target.closest('[data-a]'); if (!b) return;
     const l = cart[+b.dataset.x]; if (!l) return;
+    if (b.dataset.a === 'xinc' || b.dataset.a === 'xdec') {
+      const a = l.addons[+b.dataset.j]; if (!a) return;
+      a.qty += b.dataset.a === 'xinc' ? 1 : -1;
+      if (a.qty <= 0) l.addons.splice(+b.dataset.j, 1);
+      return refreshAll();
+    }
     if (b.dataset.a === 'del') cart.splice(+b.dataset.x, 1);
     else if (b.dataset.a === 'dec') { l.qty--; if (l.qty <= 0) cart.splice(+b.dataset.x, 1); }
     else if (b.dataset.a === 'inc') { const it = items.find(i => i.id === l.item_id); if (it && it.track_stock && stockLeft(it) <= 0) return toast('No more stock', 'err'); l.qty++; }
@@ -212,6 +231,14 @@ export async function render(root) {
   $('#oKot', R).onchange = e => { prefs.kot = e.target.checked; savePrefs(); };
   $('#oBill', R).onchange = e => { prefs.bill = e.target.checked; savePrefs(); };
   $('#place', R).onclick = place;
+  // returning customer? fill the name from the saved customers
+  $('#cphone', R).onchange = async e => {
+    const p = normPhone(e.target.value); if (!p) return;
+    try {
+      const { data } = await sb.from('customers').select('*').eq('phone', p).maybeSingle();
+      if (data) { if (!$('#cname').value.trim() && data.name) $('#cname').value = data.name; toast(`Returning customer: ${data.name || e.target.value} (${data.visits} visits)`); }
+    } catch { /* table may not exist yet */ }
+  };
 
   const onSettings = () => { $('#sc').parentElement.lastChild.textContent = ` Service charge (${num(s().service_charge_pct)}%)`; renderPays(); renderTotals(); };
   window.addEventListener('settings-changed', onSettings);

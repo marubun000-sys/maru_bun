@@ -76,3 +76,9 @@ git push -u origin main
 * **Dark / Light** and **English / සිංහල** buttons are in the top bar (and on the login page). Bills stay in English for customers.
 * **Sri Lanka time:** all dates, "today" and "this month" use Asia/Colombo time whatever the device's own time zone is. At 12:00 midnight the screens roll over to the new day by themselves.
 * **Many devices:** orders, stock, menu, settings and the dashboard refresh on every device automatically (live, with a 10–20 s safety refresh). If you made the database with the very first `schema.sql`, run `sql/realtime-all.sql` once.
+
+## Update 3 – token numbers, qty × price bills, extras with quantity, saved customers
+1. **Run `sql/update-3.sql`** once in Supabase → SQL Editor (existing database). New installs: `schema.sql` already has it.
+2. Every order gets a **Token No** (1, 2, 3… restarts at 12 midnight Sri Lanka time). Shown on bills, kitchen slip, kitchen cards, Orders page.
+3. Bill lines show `qty × unit price = total`. Extras have their own quantity (Extra Cheese × 2) and print the same way.
+4. Customer WhatsApp numbers typed in POS are saved in the **Customers** tab (visits, total spent, WhatsApp link, CSV export).
