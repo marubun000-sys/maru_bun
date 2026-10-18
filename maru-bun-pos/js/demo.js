@@ -133,6 +133,10 @@ export function createDemo() {
       ch.unsubscribe = () => listeners.delete(ch._fn);
       return ch;
     },
+    storage: { from: bucket => ({
+      async upload(path) { return { data: { path }, error: null }; },
+      getPublicUrl(path) { return { data: { publicUrl: `https://demo.invalid/storage/v1/object/public/${bucket}/${path}` } }; },
+    }) },
     removeChannel(ch) { ch && ch.unsubscribe && ch.unsubscribe(); },
     auth: {
       async getSession() { const s = readAuth(); return { data: { session: s ? { user: { email: s.email } } : null }, error: null }; },

@@ -236,6 +236,20 @@ exception when duplicate_object then null; end $$;
 -- Lost the admin phone? Run this to start fresh (next device that logs in becomes admin):
 --   delete from public.devices;
 
+-- ======== Update 6: promotions ========
+alter table public.customers add column if not exists opt_out boolean not null default false;
+
+insert into storage.buckets (id, name, public)
+values ('promos', 'promos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "promos staff upload" on storage.objects;
+create policy "promos staff upload" on storage.objects for insert to authenticated with check (bucket_id = 'promos');
+drop policy if exists "promos staff read" on storage.objects;
+create policy "promos staff read" on storage.objects for select to authenticated using (bucket_id = 'promos');
+drop policy if exists "promos staff delete" on storage.objects;
+create policy "promos staff delete" on storage.objects for delete to authenticated using (bucket_id = 'promos');
+
 -- ---------- Sample menu (edit / delete from Menu Management) ----------
 insert into public.categories (name, sort)
 select * from (values ('Hot Buns',1),('Drinks',2),('Sides',3)) v(name,sort)

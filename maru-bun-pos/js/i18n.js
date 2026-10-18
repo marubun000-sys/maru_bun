@@ -87,6 +87,9 @@ const SI = {
 };
 
 Object.assign(SI, {
+  'Send promotion': 'ප්‍රවර්ධනයක් යවන්න', 'Promos': 'ප්‍රවර්ධන', 'Receives': 'ලැබේ', 'Stopped': 'නවත්වා ඇත', 'Message': 'පණිවිඩය',
+  'Photo / poster (optional)': 'ඡායාරූපය / පෝස්ටරය (අවශ්‍ය නම්)', 'Send to': 'යවන්නේ', 'All customers': 'සියලු පාරිභෝගිකයන්', 'Start sending': 'යැවීම අරඹන්න',
+  'Skip': 'මඟ හරින්න', 'Stop (continue later)': 'නවත්වන්න (පසුව දිගටම)', 'Unfinished promotion': 'නොනිම් ප්‍රවර්ධනය', 'Continue': 'දිගටම', 'Discard': 'අත්හරින්න',
   'Waiting for the admin': 'පරිපාලක එනතුරු', 'Waiting…': 'බලාපොරොත්තුවෙන්…', 'Allow': 'අවසර දෙන්න', 'Deny': 'ප්‍රතික්ෂේප කරන්න', 'The admin said no.': 'පරිපාලක ප්‍රතික්ෂේප කළා.',
   'No answer from the admin. Try again.': 'පරිපාලකගෙන් පිළිතුරක් නැහැ. නැවත උත්සාහ කරන්න.', 'Cancel': 'අවලංගු',
   'Devices & cashiers': 'උපාංග සහ අයකැමියන්', 'Admin only': 'පරිපාලකයාට පමණි', 'Admin email': 'පරිපාලක ඊමේල්', 'Admin password': 'පරිපාලක මුරපදය', 'Unlock': 'විවෘත කරන්න',

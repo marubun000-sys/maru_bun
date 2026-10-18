@@ -100,3 +100,8 @@ Note: this is an app-level gate for staff devices (the Supabase login itself is 
 2. Only the **admin device** can Approve / Remove devices (buttons are not even shown on other devices).
 3. Opening **Settings & Security** on any other device: step 1 admin email + password (asked EVERY time, leaving the page locks it again), step 2 a pop-up appears on the admin device → **Allow / Deny**.
 4. Fixed: signing in / out on one device (or checking the admin password) used to sign **every** device out. Sign-out is now local to that device only.
+
+## Update 7 – promotions to saved customers
+1. **Run `sql/update-6.sql`** once (adds the `opt_out` column and a public photo bucket `promos`).
+2. Customers tab → **Send promotion**: write a message ({name} = customer's first name), add a photo (its link is added to the message, WhatsApp shows a preview), choose who gets it (all / visited in the last N days / at least N visits), then tap **Open WhatsApp** once per customer and press Send. Progress is saved if you stop.
+3. Customers marked **Stopped** (tap the Promos pill) are skipped. WhatsApp does not allow fully automatic bulk sending without its paid Business API, and sending to people who did not agree can get a number banned.
