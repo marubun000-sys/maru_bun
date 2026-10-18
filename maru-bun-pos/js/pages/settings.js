@@ -1,12 +1,40 @@
 import { sb, DEMO } from '../sb.js';
 import { state, saveSettings, getCashier, setCashier } from '../state.js';
-import { $, esc, num, toast, ico, confirmBox, errMsg } from '../utils.js';
+import { $, esc, num, toast, ico, confirmBox, errMsg, promptModal, onLive, dtstr } from '../utils.js';
+import { isAdminDevice, isUnlocked, setUnlocked, verifyAdmin, listDevices, approveDevice, removeDevice, renameDevice, deviceId, myDevice, setDeviceName } from '../device.js';
 
 const METHODS = [['cash', 'Cash'], ['card', 'Card'], ['bank', 'Bank Transfer'], ['qr', 'QR Pay']];
 
+// Other devices must type the ADMIN's email + password to open this page
 export async function render(root) {
+  let inner = null;
+  const open = async () => { inner = await renderInner(root); };
+  if (!isAdminDevice() && !isUnlocked()) {
+    root.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto"><h2>${ico('shield')} Admin only</h2>
+      <p class="muted small">Enter the admin's email and password to open Settings &amp; Security on this device.</p>
+      <div id="ue"></div>
+      <form id="uf"><label>Admin email<input type="email" id="ue1" autocomplete="off" required></label>
+      <label>Admin password<input type="password" id="up" autocomplete="off" required></label>
+      <button class="btn big" id="ub">Unlock</button></form></div>`;
+    $('#uf', root).onsubmit = async e => {
+      e.preventDefault(); const b = $('#ub', root); b.disabled = true;
+      const ok = await verifyAdmin($('#ue1', root).value, $('#up', root).value);
+      b.disabled = false;
+      if (!ok) { $('#ue', root).innerHTML = '<div class="err">Wrong admin email or password</div>'; $('#up', root).value = ''; return; }
+      setUnlocked(); root.innerHTML = ''; await open();
+    };
+  } else await open();
+  return () => { if (typeof inner === 'function') inner(); };
+}
+
+async function renderInner(root) {
   const s = state.settings;
   root.innerHTML = `
+  <div class="card" id="devCard"><h2>${ico('shield')} Devices &amp; cashiers</h2>
+    <p class="muted small">Every phone / computer that signs in appears here with the cashier on duty. New devices cannot use the POS until you approve them. <b>Admin</b> = the first device.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Device</th><th>Cashier on duty</th><th>Status</th><th>Last seen</th><th></th></tr></thead><tbody id="devRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div>
+  </div>
+
   <div class="cols">
     <div class="card"><h2>Counter / Cashier on duty</h2>
       <label>Name of the person at the counter now<input id="cashier" value="${esc(getCashier())}" placeholder="e.g. Kasun"></label>
@@ -112,4 +140,32 @@ export async function render(root) {
     };
   }
   await drawMfa();
+
+  // ---------- devices ----------
+  let devs = [];
+  async function drawDevs() {
+    try { devs = await listDevices(); } catch (e) { $('#devRows', root).innerHTML = `<tr><td colspan="5"><div class="err">${esc(errMsg(e))}<br><small>Run sql/update-4.sql in the Supabase SQL Editor.</small></div></td></tr>`; return; }
+    const meId = deviceId();
+    $('#devRows', root).innerHTML = devs.map(d => `<tr>
+      <td><b>${esc(d.name || 'Unnamed')}</b> ${d.id === meId ? '<span class="pill info">This device</span>' : ''} ${d.is_admin ? '<span class="pill ok">Admin</span>' : ''}<br><span class="muted small">${esc(d.email || '')}</span></td>
+      <td>${d.cashier ? '<b>' + esc(d.cashier) + '</b>' : '<span class="muted">not set</span>'}</td>
+      <td>${d.status === 'approved' ? '<span class="pill ok">Approved</span>' : '<span class="pill warn">Waiting</span>'}</td>
+      <td class="muted small">${dtstr(d.last_seen)}</td>
+      <td class="r" style="white-space:nowrap">${d.status === 'pending' ? `<button class="btn sm" data-dv="ok" data-id="${esc(d.id)}">Approve</button> ` : ''}
+        ${d.id === meId ? `<button class="btn ghost sm" data-dv="ren" data-id="${esc(d.id)}">${ico('edit', 14)}</button>` : ''}
+        ${d.is_admin ? '' : `<button class="btn ghost sm" data-dv="del" data-id="${esc(d.id)}">${ico('trash', 14)} Remove</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No devices yet</td></tr>';
+  }
+  $('#devCard', root).onclick = async e => {
+    const b = e.target.closest('[data-dv]'); if (!b) return;
+    const d = devs.find(x => x.id === b.dataset.id); if (!d) return;
+    try {
+      if (b.dataset.dv === 'ok') { const { error } = await approveDevice(d.id); if (error) throw error; toast(`${d.name || 'Device'} approved`); }
+      if (b.dataset.dv === 'del') { if (!await confirmBox(`Remove "${d.name || 'this device'}"? It will be signed out and must be approved again.`, 'Remove')) return; const { error } = await removeDevice(d.id); if (error) throw error; toast('Device removed'); }
+      if (b.dataset.dv === 'ren') { const v = await promptModal({ title: 'Device name', label: 'Name of this device', value: d.name || '' }); if (!v || !v.trim()) return; const { error } = await renameDevice(d.id, v.trim()); if (error) throw error; setDeviceName(v); }
+    } catch (err) { return toast(errMsg(err), 'err', 6000); }
+    drawDevs();
+  };
+  const offDev = onLive(drawDevs, 400);
+  await drawDevs();
+  return () => offDev();
 }

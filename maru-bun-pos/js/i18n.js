@@ -87,6 +87,10 @@ const SI = {
 };
 
 Object.assign(SI, {
+  'Devices & cashiers': 'උපාංග සහ අයකැමියන්', 'Admin only': 'පරිපාලකයාට පමණි', 'Admin email': 'පරිපාලක ඊමේල්', 'Admin password': 'පරිපාලක මුරපදය', 'Unlock': 'විවෘත කරන්න',
+  'Wrong admin email or password': 'පරිපාලක ඊමේල් හෝ මුරපදය වැරදියි', 'Waiting for admin approval': 'පරිපාලක අනුමැතිය බලාපොරොත්තුවෙන්', 'Check again': 'නැවත බලන්න',
+  'Name this device': 'මේ උපාංගයට නමක් දෙන්න', 'Device name': 'උපාංගයේ නම', 'Continue': 'ඉදිරියට', 'Approve': 'අනුමත කරන්න', 'Remove': 'ඉවත් කරන්න', 'Approved': 'අනුමතයි', 'Waiting': 'බලාපොරොත්තුවෙන්',
+  'This device': 'මේ උපාංගය', 'Admin': 'පරිපාලක', 'Device': 'උපාංගය', 'Cashier on duty': 'රාජකාරියේ සිටින අයකැමි', 'Last seen': 'අන්තිමට දුටුවේ', 'Back to sign in': 'පිවිසුමට ආපසු',
   'Who is at this counter?': 'මේ කවුන්ටරයේ ඉන්නේ කවුද?', 'Cashier name (this device only)': 'කැෂියර් නම (මේ උපාංගයට පමණි)', 'Cashier saved for this device': 'මේ උපාංගයට කැෂියර් සුරැකුණා',
   'Customers': 'පාරිභෝගිකයෝ', 'Token': 'ටෝකන්', 'Table no. (optional)': 'මේස අංකය (අවශ්‍ය නම්)',
   'Visits': 'පැමිණීම්', 'Total spent (LKR)': 'මුළු වියදම (LKR)', 'Last visit': 'අන්තිම පැමිණීම', 'Search name / phone': 'නම / දුරකථන සොයන්න',

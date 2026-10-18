@@ -226,7 +226,7 @@ td.r,th.r{text-align:right}
 .clock{font-size:13px;color:var(--muted);white-space:nowrap}
 .devsel{margin:0;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
 .devsel select{width:auto;padding:5px 8px;margin:0;font-size:12px;border-radius:99px}
-.soundbar{background:var(--gold);color:#1a1200;text-align:center;padding:8px;font-weight:600;cursor:pointer;display:flex;gap:8px;align-items:center;justify-content:center}
+.soundbar{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:60;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.35);background:var(--gold);color:#1a1200;text-align:center;padding:8px 16px;font-weight:600;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:center;justify-content:center;white-space:nowrap}
 .soundbar[hidden]{display:none}
 .toast{cursor:default}
 .toast.sticky{cursor:pointer;border-left-width:6px;animation:in .25s,pulse 1.6s ease-in-out 3}

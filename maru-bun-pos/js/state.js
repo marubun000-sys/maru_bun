@@ -26,7 +26,7 @@ export const state = {
 export const getCashier = () => { try { return localStorage.getItem('mb_cashier') || ''; } catch { return ''; } };
 export function setCashier(name) {
   try { localStorage.setItem('mb_cashier', String(name || '').trim()); } catch { /* ignore */ }
-  window.dispatchEvent(new Event('settings-changed'));
+  window.dispatchEvent(new Event('settings-changed')); window.dispatchEvent(new Event('cashier-changed'));
 }
 
 export async function loadSettings() {

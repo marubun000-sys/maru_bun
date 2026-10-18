@@ -86,3 +86,11 @@ git push -u origin main
 ## Update 4
 - An unfinished order in POS (items, extras, table, customer, note, discount…) is kept when you open another tab or refresh; it clears only after **Place Order**.
 - **Cashier on duty is now per device** (saved in that phone/computer's browser). Each counter sets its own name; bills print the cashier of the device that made the order. All devices still see every order live.
+
+## Update 5 – devices, admin approval, cashier on bills
+1. **Run `sql/update-4.sql`** once in Supabase → SQL Editor. Then open the POS **first on the owner's phone/computer** – that device becomes the **Admin**.
+2. Every other device must be named and then **approved by the admin** (Settings & Security → Devices & cashiers). Admin can **Remove** a device (it is signed out and needs approval again).
+3. Opening **Settings & Security** on a non-admin device asks for the **admin email + password**.
+4. Settings shows every device with the cashier on duty. The cashier name is printed on printed bills, WhatsApp text and WhatsApp picture bills. POS asks for the cashier name if it is empty.
+5. Lost the admin phone? In the SQL Editor run `delete from public.devices;` – the next device to log in becomes admin.
+Note: this is an app-level gate for staff devices (the Supabase login itself is shared). Tip: create separate staff logins in Supabase → Authentication → Users, and keep the owner's account private as the admin account.

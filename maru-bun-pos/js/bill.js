@@ -86,6 +86,7 @@ export function billText(o, s = state.settings) {
   if (o.token_no) L.push(`🎫 Token No: *${o.token_no}*`);
   L.push(`🍽️ ${typeLabel(o.order_type)}${o.table_no ? ' · Table ' + o.table_no : ''}`);
   if (o.customer_name) L.push(`👤 ${o.customer_name}`);
+  if (o.cashier) L.push(`🧑‍💼 Cashier: ${o.cashier}`);
   L.push('--------------------------');
   (o.items || []).forEach(l => {
     const r = lineRows(l);

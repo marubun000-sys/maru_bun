@@ -22,6 +22,7 @@ function seed() {
     settings: [{ id: 1 }],
     orders: [],
     customers: [],
+    devices: [],
   };
 }
 function load() {
@@ -107,6 +108,14 @@ export function createDemo() {
       if (name === 'adjust_stock') {
         const d = load(); const r = d.items.find(x => x.id === a.p_item);
         if (r && r.track_stock) { r.stock += a.p_delta; save(d); }
+      }
+      if (name === 'register_device') {
+        const d = load(); d.devices = d.devices || []; const now = iso();
+        let r = d.devices.find(x => x.id === a.p_id);
+        if (r) { Object.assign(r, { last_seen: now, cashier: a.p_cashier || '', email: a.p_email || r.email }); if (a.p_name) r.name = a.p_name; }
+        else { const adm = d.devices.some(x => x.is_admin); r = { id: a.p_id, name: a.p_name || '', cashier: a.p_cashier || '', email: a.p_email || '', user_agent: '', is_admin: !adm, status: adm ? 'pending' : 'approved', created_at: now, last_seen: now }; d.devices.push(r); }
+        save(d); emit({ eventType: 'UPDATE', table: 'devices', new: { ...r }, old: {} });
+        return { data: { ...r }, error: null };
       }
       if (name === 'upsert_customer') {
         const d = load(); d.customers = d.customers || [];

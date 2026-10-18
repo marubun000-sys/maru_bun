@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
-import { state, getCashier } from '../state.js';
-import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone } from '../utils.js';
+import { state, getCashier, setCashier } from '../state.js';
+import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone, promptModal } from '../utils.js';
 import { payLabel, showBillModal, printHTML, billHTML, kotHTML } from '../bill.js';
 
 export async function render(root) {
@@ -164,6 +164,11 @@ export async function render(root) {
   // ---- place order ----
   async function place() {
     if (placing || !cart.length) return;
+    if (!getCashier()) {   // every bill must show who served the customer
+      const v = await promptModal({ title: 'Cashier name', label: 'Who is at the counter? (printed on the bill)', value: '' });
+      if (!v || !v.trim()) return toast('Enter the cashier name to place the order', 'err');
+      setCashier(v);
+    }
     const c = calc(), got = num(cash);
     if (pay === 'cash' && cash !== '' && got < c.total) return toast(`Cash received is less than the total (short ${money(c.total - got)})`, 'err');
     placing = true; $('#place').disabled = true;

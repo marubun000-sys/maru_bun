@@ -2,6 +2,7 @@ import { sb, DEMO } from './sb.js';
 import { state, loadSettings, saveSettings, getCashier, setCashier } from './state.js';
 import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen } from './utils.js';
 import { initI18n, setLang, getLang } from './i18n.js';
+import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, forgetDevice } from './device.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
 import * as customers from './pages/customers.js';
@@ -108,9 +109,58 @@ async function boot() {
   if (!session) { try { await loadSettings(); } catch { /* not allowed before login */ } return showLogin(); }
   const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') return showMfa();
-  state.user = session.user;
   await loadSettings();
+  if (!(await deviceGate(session.user))) return;
+  state.user = session.user;
   startApp();
+}
+
+// =====================================================================
+//  Device approval: first device = admin, every other device waits for the admin to approve it
+// =====================================================================
+async function deviceGate(user) {
+  let name = getDeviceName();
+  if (!name) {
+    name = await new Promise(res => {
+      loginShell(`<p class="muted" style="text-align:center">Name this device<br><small>e.g. Counter 1, Kitchen tablet, Owner phone</small></p>
+        <form id="nf"><label>Device name<input id="dn" required maxlength="40" value="${esc(guessName())}"></label><button class="btn big">Continue</button></form>
+        <p style="text-align:center"><a href="#" id="so" class="muted">Sign out</a></p>`);
+      $('#dn').select();
+      $('#so').onclick = async e => { e.preventDefault(); await sb.auth.signOut(); showLogin(); res(null); };
+      $('#nf').onsubmit = e => { e.preventDefault(); res($('#dn').value.trim()); };
+    });
+    if (!name) return false;
+    setDeviceName(name);
+  }
+  const r = await registerDevice(user.email);
+  if (r.error) { console.warn('Device list not set up yet (run sql/update-4.sql):', r.error); return true; }   // old database -> keep working
+  if (r.row.status === 'approved') return true;
+  return await new Promise(res => {
+    loginShell(`<div class="pill warn" style="display:block;text-align:center;margin:10px 0">Waiting for admin approval</div>
+      <p class="muted" style="text-align:center">This device <b>${esc(name)}</b> is new.<br>Ask the admin to open <b>Settings &amp; Security → Devices</b> and tap <b>Approve</b>.</p>
+      <div class="row"><button class="btn ghost" id="chk" style="flex:1">Check again</button><button class="btn ghost" id="so" style="flex:1">Sign out</button></div>`);
+    let t;
+    const check = async () => {
+      const d = await fetchMe();
+      if (d === null) { clearInterval(t); return removedScreen('Admin has not accepted this device.'); }
+      if (d && d.status === 'approved') { clearInterval(t); res(true); }
+    };
+    t = setInterval(check, 4000);
+    $('#chk').onclick = check;
+    $('#so').onclick = async () => { clearInterval(t); await sb.auth.signOut(); showLogin(); res(false); };
+  });
+}
+async function removedScreen(msg = 'The admin removed this device.') {
+  stopLive(); forgetDevice();
+  try { await sb.auth.signOut(); } catch { /* ignore */ }
+  loginShell(`<div class="err" style="text-align:center">${esc(msg)}</div>
+    <p class="muted" style="text-align:center">To use the POS on this device again, sign in and ask the admin to approve it.</p>
+    <button class="btn big" id="back">Back to sign in</button>`);
+  $('#back').onclick = () => { location.hash = ''; showLogin(); };
+}
+async function deviceWatch() {
+  const d = await fetchMe();
+  if (d === null) removedScreen();
 }
 
 // =====================================================================
@@ -253,7 +303,7 @@ function startLive() {
   } catch (e) { console.warn('realtime unavailable', e); }
   try {                                                      // menu / stock / settings changed on another device
     chan2 = sb.channel('catalog-live');
-    ['items', 'categories', 'addons', 'inventory', 'settings', 'customers'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
+    ['items', 'categories', 'addons', 'inventory', 'settings', 'customers', 'devices'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
       window.dispatchEvent(new Event('data-changed'));
       if (t === 'settings') refreshSettings();
     }));
@@ -263,6 +313,7 @@ function startLive() {
   poll();
   timers = [
     setInterval(poll, 10000),
+    setInterval(deviceWatch, 12000),
     setInterval(clockTick, 15000),
     setInterval(() => { if (!document.hidden) { refreshSettings(); window.dispatchEvent(new Event('data-changed')); } }, 20000), // safety net if realtime is off
   ];
