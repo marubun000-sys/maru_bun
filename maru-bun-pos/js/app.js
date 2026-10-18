@@ -1,8 +1,8 @@
 import { sb, DEMO } from './sb.js';
 import { state, loadSettings, saveSettings, getCashier, setCashier } from './state.js';
-import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen } from './utils.js';
+import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen, modal } from './utils.js';
 import { initI18n, setLang, getLang } from './i18n.js';
-import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, forgetDevice } from './device.js';
+import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, forgetDevice, amAdmin, deviceId, answerSettings, fresh } from './device.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
 import * as customers from './pages/customers.js';
@@ -88,7 +88,7 @@ async function showMfa() {
     <button class="btn big">Verify</button></form>
     <p style="text-align:center"><a href="#" id="so" class="muted">Sign out</a></p>`);
   $('#code').focus();
-  $('#so').onclick = async e => { e.preventDefault(); await sb.auth.signOut(); showLogin(); };
+  $('#so').onclick = async e => { e.preventDefault(); await sb.auth.signOut({ scope: 'local' }); showLogin(); };
   $('#mf').onsubmit = async e => {
     e.preventDefault();
     const { data: f } = await sb.auth.mfa.listFactors();
@@ -126,7 +126,7 @@ async function deviceGate(user) {
         <form id="nf"><label>Device name<input id="dn" required maxlength="40" value="${esc(guessName())}"></label><button class="btn big">Continue</button></form>
         <p style="text-align:center"><a href="#" id="so" class="muted">Sign out</a></p>`);
       $('#dn').select();
-      $('#so').onclick = async e => { e.preventDefault(); await sb.auth.signOut(); showLogin(); res(null); };
+      $('#so').onclick = async e => { e.preventDefault(); await sb.auth.signOut({ scope: 'local' }); showLogin(); res(null); };
       $('#nf').onsubmit = e => { e.preventDefault(); res($('#dn').value.trim()); };
     });
     if (!name) return false;
@@ -147,12 +147,12 @@ async function deviceGate(user) {
     };
     t = setInterval(check, 4000);
     $('#chk').onclick = check;
-    $('#so').onclick = async () => { clearInterval(t); await sb.auth.signOut(); showLogin(); res(false); };
+    $('#so').onclick = async () => { clearInterval(t); await sb.auth.signOut({ scope: 'local' }); showLogin(); res(false); };
   });
 }
 async function removedScreen(msg = 'The admin removed this device.') {
   stopLive(); forgetDevice();
-  try { await sb.auth.signOut(); } catch { /* ignore */ }
+  try { await sb.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
   loginShell(`<div class="err" style="text-align:center">${esc(msg)}</div>
     <p class="muted" style="text-align:center">To use the POS on this device again, sign in and ask the admin to approve it.</p>
     <button class="btn big" id="back">Back to sign in</button>`);
@@ -160,8 +160,32 @@ async function removedScreen(msg = 'The admin removed this device.') {
 }
 async function deviceWatch() {
   const d = await fetchMe();
-  if (d === null) removedScreen();
+  if (d === null) return removedScreen();
+  checkRequests();
 }
+
+// ADMIN device only: pop up when another device asks to open Settings & Security (or a new device is waiting)
+const asked = new Set();
+async function checkRequests() {
+  if (!state.user || !amAdmin()) return;
+  const { data, error } = await sb.from('devices').select('*').neq('id', deviceId());
+  if (error || !data) return;
+  for (const d of data) {
+    const nm = esc(d.name || 'A device') + (d.cashier ? ` <span class="muted">(${esc(d.cashier)})</span>` : '');
+    if (d.settings_req === 'requested' && fresh(d) && !asked.has(d.id + d.settings_req_at)) {
+      asked.add(d.id + d.settings_req_at); beep('new');
+      let done = false;
+      const answer = async v => { if (done) return; done = true; const { error: e } = await answerSettings(d.id, v); if (e) toast(errMsg(e), 'err'); m.close(); };
+      const m = modal(`<h3>${ico('shield')} Settings &amp; Security</h3><p><b>${nm}</b> is asking to open <b>Settings &amp; Security</b>.</p>
+        <div class="row end"><button class="btn ghost" data-no>Deny</button><button class="btn" data-yes>Allow</button></div>`, { onClose: () => answer('denied') });
+      $('[data-yes]', m.el).onclick = () => answer('allowed'); $('[data-no]', m.el).onclick = () => answer('denied');
+    } else if (d.status === 'pending' && !asked.has('p' + d.id)) {
+      asked.add('p' + d.id); beep('done');
+      toast(`New device "${d.name || 'device'}" is waiting for approval – open Settings & Security → Devices`, 'info', 12000);
+    }
+  }
+}
+window.addEventListener('data-changed', () => { clearTimeout(checkRequests.t); checkRequests.t = setTimeout(checkRequests, 300); });
 
 // =====================================================================
 //  Shell
@@ -187,7 +211,7 @@ function startApp() {
     </main></div>`;
   applyBranding(); paintCtl();
   $('#role').value = role(); $('#role').onchange = e => store.set('mb_role', e.target.value);
-  $('#logout').onclick = async e => { e.preventDefault(); stopLive(); await sb.auth.signOut(); location.hash = ''; showLogin(); };
+  $('#logout').onclick = async e => { e.preventDefault(); stopLive(); await sb.auth.signOut({ scope: 'local' }); location.hash = ''; showLogin(); };
   $('#cashier').onclick = async () => {
     const v = await promptModal({ title: 'Cashier on duty', label: 'Name of the person at the counter now', value: getCashier() });
     if (v === null) return;

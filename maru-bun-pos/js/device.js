@@ -17,6 +17,7 @@ export function guessName() {
 let me = null;                                   // this device's row (null = registry not available -> everything allowed)
 export const myDevice = () => me;
 export const isAdminDevice = () => !me || !!me.is_admin;
+export const amAdmin = () => !!(me && me.is_admin);          // really the admin device (registry is on)
 
 const asRow = d => (Array.isArray(d) ? d[0] : d) || null;
 
@@ -35,8 +36,14 @@ export async function listDevices() {
   const { data, error } = await sb.from('devices').select('*').order('created_at', { ascending: true });
   if (error) throw error; return data || [];
 }
-export const approveDevice = id => sb.from('devices').update({ status: 'approved' }).eq('id', id);
-export const removeDevice = id => sb.from('devices').delete().eq('id', id);
+const adminOnly = { error: { message: 'Only the admin device can do this' } };
+export const approveDevice = async id => (amAdmin() ? sb.from('devices').update({ status: 'approved' }).eq('id', id) : adminOnly);
+export const removeDevice = async id => (amAdmin() ? sb.from('devices').delete().eq('id', id) : adminOnly);
+// ---- a non-admin device asks the admin to let it into Settings & Security ----
+export const requestSettings = () => sb.from('devices').update({ settings_req: 'requested', settings_req_at: new Date().toISOString() }).eq('id', deviceId());
+export const clearSettingsRequest = () => sb.from('devices').update({ settings_req: '' }).eq('id', deviceId());
+export const answerSettings = (id, v) => (amAdmin() ? sb.from('devices').update({ settings_req: v, settings_req_at: new Date().toISOString() }).eq('id', id) : adminOnly);
+export const fresh = d => !!d && !!d.settings_req_at && Date.now() - new Date(d.settings_req_at).getTime() < 3 * 60000;
 export const renameDevice = (id, name) => sb.from('devices').update({ name }).eq('id', id);
 
 // keep the cashier name shown in Settings up to date
@@ -45,11 +52,7 @@ window.addEventListener('cashier-changed', async () => {
   try { await sb.from('devices').update({ cashier: getCashier(), last_seen: new Date().toISOString() }).eq('id', deviceId()); } catch { /* ignore */ }
 });
 
-// ---- Settings & Security lock for non-admin devices ----
-const UK = 'mb_unlock';
-export const isUnlocked = () => { try { return Date.now() - Number(sessionStorage.getItem(UK) || 0) < 15 * 60000; } catch { return false; } };
-export const setUnlocked = () => { try { sessionStorage.setItem(UK, String(Date.now())); } catch { /* ignore */ } };
-
+// ---- Settings & Security lock for non-admin devices (asked EVERY time the page is opened) ----
 export async function verifyAdmin(email, password) {
   const { data } = await sb.from('devices').select('email').eq('is_admin', true).limit(1);
   const adminEmail = ((data && data[0] && data[0].email) || '').toLowerCase();
@@ -58,7 +61,7 @@ export async function verifyAdmin(email, password) {
   try {
     const c = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false, storageKey: 'mb-verify' } });
     const { error } = await c.auth.signInWithPassword({ email: adminEmail, password });
-    try { await c.auth.signOut(); } catch { /* ignore */ }
+    try { await c.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
     return !error;
   } catch { return false; }
 }

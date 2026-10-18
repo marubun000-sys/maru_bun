@@ -94,3 +94,9 @@ git push -u origin main
 4. Settings shows every device with the cashier on duty. The cashier name is printed on printed bills, WhatsApp text and WhatsApp picture bills. POS asks for the cashier name if it is empty.
 5. Lost the admin phone? In the SQL Editor run `delete from public.devices;` – the next device to log in becomes admin.
 Note: this is an app-level gate for staff devices (the Supabase login itself is shared). Tip: create separate staff logins in Supabase → Authentication → Users, and keep the owner's account private as the admin account.
+
+## Update 6 – admin-only approval, Settings access request, no more forced logout
+1. **Run `sql/update-5.sql`** once in Supabase → SQL Editor.
+2. Only the **admin device** can Approve / Remove devices (buttons are not even shown on other devices).
+3. Opening **Settings & Security** on any other device: step 1 admin email + password (asked EVERY time, leaving the page locks it again), step 2 a pop-up appears on the admin device → **Allow / Deny**.
+4. Fixed: signing in / out on one device (or checking the admin password) used to sign **every** device out. Sign-out is now local to that device only.

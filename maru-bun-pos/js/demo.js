@@ -140,7 +140,7 @@ export function createDemo() {
         if (email && password === 'admin123') { localStorage.setItem(AUTH, JSON.stringify({ email })); sessionStorage.setItem('mb_aal', 'aal1'); return { data: { session: { user: { email } } }, error: null }; }
         return { data: null, error: { message: 'Invalid login credentials (demo: password is admin123)' } };
       },
-      async signOut() { localStorage.removeItem(AUTH); sessionStorage.removeItem('mb_aal'); return { error: null }; },
+      async signOut(_o) { localStorage.removeItem(AUTH); sessionStorage.removeItem('mb_aal'); return { error: null }; },
       async updateUser() { return { data: {}, error: null }; },
       mfa: {
         async getAuthenticatorAssuranceLevel() { const d = load(); const f = d._mfa; return { data: { currentLevel: aal(), nextLevel: f && f.verified ? 'aal2' : 'aal1' }, error: null }; },

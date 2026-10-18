@@ -1,37 +1,62 @@
 import { sb, DEMO } from '../sb.js';
 import { state, saveSettings, getCashier, setCashier } from '../state.js';
 import { $, esc, num, toast, ico, confirmBox, errMsg, promptModal, onLive, dtstr } from '../utils.js';
-import { isAdminDevice, isUnlocked, setUnlocked, verifyAdmin, listDevices, approveDevice, removeDevice, renameDevice, deviceId, myDevice, setDeviceName } from '../device.js';
+import { isAdminDevice, amAdmin, verifyAdmin, listDevices, approveDevice, removeDevice, renameDevice, deviceId, setDeviceName, fetchMe, requestSettings, clearSettingsRequest, fresh } from '../device.js';
 
 const METHODS = [['cash', 'Cash'], ['card', 'Card'], ['bank', 'Bank Transfer'], ['qr', 'QR Pay']];
 
-// Other devices must type the ADMIN's email + password to open this page
+// Other devices: (1) type the ADMIN's email + password, (2) the admin must tap "Allow" on the admin device.
+// Asked every time the page is opened - leaving the page locks it again.
 export async function render(root) {
-  let inner = null;
+  let inner = null, timer = null, offLive = null, requested = false, alive = true;
   const open = async () => { inner = await renderInner(root); };
-  if (!isAdminDevice() && !isUnlocked()) {
+  const stopWait = () => { clearInterval(timer); timer = null; if (offLive) { offLive(); offLive = null; } };
+
+  function stepPassword(msg = '') {
+    stopWait();
     root.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto"><h2>${ico('shield')} Admin only</h2>
-      <p class="muted small">Enter the admin's email and password to open Settings &amp; Security on this device.</p>
-      <div id="ue"></div>
+      <p class="muted small">Step 1 of 2 · Enter the admin's email and password to open Settings &amp; Security on this device.</p>
+      <div id="ue">${msg}</div>
       <form id="uf"><label>Admin email<input type="email" id="ue1" autocomplete="off" required></label>
       <label>Admin password<input type="password" id="up" autocomplete="off" required></label>
-      <button class="btn big" id="ub">Unlock</button></form></div>`;
+      <button class="btn big" id="ub">Continue</button></form></div>`;
     $('#uf', root).onsubmit = async e => {
       e.preventDefault(); const b = $('#ub', root); b.disabled = true;
       const ok = await verifyAdmin($('#ue1', root).value, $('#up', root).value);
       b.disabled = false;
       if (!ok) { $('#ue', root).innerHTML = '<div class="err">Wrong admin email or password</div>'; $('#up', root).value = ''; return; }
-      setUnlocked(); root.innerHTML = ''; await open();
+      stepWait();
     };
-  } else await open();
-  return () => { if (typeof inner === 'function') inner(); };
+  }
+  async function stepWait() {
+    root.innerHTML = `<div class="card" style="max-width:420px;margin:30px auto;text-align:center"><h2>${ico('shield')} Waiting for the admin</h2>
+      <p class="muted small">Step 2 of 2 · A request was sent to the admin device. Ask the admin to tap <b>Allow</b>.</p>
+      <div class="pill warn" style="display:inline-block;margin:8px 0">Waiting…</div><br><button class="btn ghost" id="wc">Cancel</button></div>`;
+    $('#wc', root).onclick = async () => { await cancel(); stepPassword(); };
+    try { const { error } = await requestSettings(); if (error) throw error; requested = true; }
+    catch (e) { return stepPassword(`<div class="err">${esc(errMsg(e))}<br><small>Run sql/update-5.sql in Supabase first.</small></div>`); }
+    const started = Date.now();
+    const check = async () => {
+      if (!alive) return;
+      const d = await fetchMe();
+      if (d && d.settings_req === 'allowed' && fresh(d)) { stopWait(); requested = false; try { await clearSettingsRequest(); } catch { /* ignore */ } unlocked = true; root.innerHTML = ''; return open(); }
+      if (d && d.settings_req === 'denied') { stopWait(); requested = false; try { await clearSettingsRequest(); } catch { /* ignore */ } return stepPassword('<div class="err">The admin said no.</div>'); }
+      if (Date.now() - started > 3 * 60000) { stopWait(); await cancel(); stepPassword('<div class="err">No answer from the admin. Try again.</div>'); }
+    };
+    timer = setInterval(check, 2000); offLive = onLive(check, 200);
+  }
+  async function cancel() { stopWait(); if (requested) { requested = false; try { await clearSettingsRequest(); } catch { /* ignore */ } } }
+
+  if (!isAdminDevice() && !unlocked) stepPassword(); else await open();
+  return () => { alive = false; unlocked = false; cancel(); if (typeof inner === 'function') inner(); };
 }
+let unlocked = false;
 
 async function renderInner(root) {
   const s = state.settings;
   root.innerHTML = `
   <div class="card" id="devCard"><h2>${ico('shield')} Devices &amp; cashiers</h2>
-    <p class="muted small">Every phone / computer that signs in appears here with the cashier on duty. New devices cannot use the POS until you approve them. <b>Admin</b> = the first device.</p>
+    <p class="muted small">Every phone / computer that signs in appears here with the cashier on duty. New devices cannot use the POS until the <b>admin device</b> approves them. Only the admin device can approve or remove devices.</p>
     <div class="tbl-wrap"><table><thead><tr><th>Device</th><th>Cashier on duty</th><th>Status</th><th>Last seen</th><th></th></tr></thead><tbody id="devRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div>
   </div>
 
@@ -145,15 +170,15 @@ async function renderInner(root) {
   let devs = [];
   async function drawDevs() {
     try { devs = await listDevices(); } catch (e) { $('#devRows', root).innerHTML = `<tr><td colspan="5"><div class="err">${esc(errMsg(e))}<br><small>Run sql/update-4.sql in the Supabase SQL Editor.</small></div></td></tr>`; return; }
-    const meId = deviceId();
+    const meId = deviceId(), isAdm = amAdmin();
     $('#devRows', root).innerHTML = devs.map(d => `<tr>
       <td><b>${esc(d.name || 'Unnamed')}</b> ${d.id === meId ? '<span class="pill info">This device</span>' : ''} ${d.is_admin ? '<span class="pill ok">Admin</span>' : ''}<br><span class="muted small">${esc(d.email || '')}</span></td>
       <td>${d.cashier ? '<b>' + esc(d.cashier) + '</b>' : '<span class="muted">not set</span>'}</td>
       <td>${d.status === 'approved' ? '<span class="pill ok">Approved</span>' : '<span class="pill warn">Waiting</span>'}</td>
       <td class="muted small">${dtstr(d.last_seen)}</td>
-      <td class="r" style="white-space:nowrap">${d.status === 'pending' ? `<button class="btn sm" data-dv="ok" data-id="${esc(d.id)}">Approve</button> ` : ''}
+      <td class="r" style="white-space:nowrap">${isAdm && d.status === 'pending' ? `<button class="btn sm" data-dv="ok" data-id="${esc(d.id)}">Approve</button> ` : ''}
         ${d.id === meId ? `<button class="btn ghost sm" data-dv="ren" data-id="${esc(d.id)}">${ico('edit', 14)}</button>` : ''}
-        ${d.is_admin ? '' : `<button class="btn ghost sm" data-dv="del" data-id="${esc(d.id)}">${ico('trash', 14)} Remove</button>`}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No devices yet</td></tr>';
+        ${isAdm && !d.is_admin ? `<button class="btn ghost sm" data-dv="del" data-id="${esc(d.id)}">${ico('trash', 14)} Remove</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No devices yet</td></tr>';
   }
   $('#devCard', root).onclick = async e => {
     const b = e.target.closest('[data-dv]'); if (!b) return;

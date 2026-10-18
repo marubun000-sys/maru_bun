@@ -87,6 +87,8 @@ const SI = {
 };
 
 Object.assign(SI, {
+  'Waiting for the admin': 'පරිපාලක එනතුරු', 'Waiting…': 'බලාපොරොත්තුවෙන්…', 'Allow': 'අවසර දෙන්න', 'Deny': 'ප්‍රතික්ෂේප කරන්න', 'The admin said no.': 'පරිපාලක ප්‍රතික්ෂේප කළා.',
+  'No answer from the admin. Try again.': 'පරිපාලකගෙන් පිළිතුරක් නැහැ. නැවත උත්සාහ කරන්න.', 'Cancel': 'අවලංගු',
   'Devices & cashiers': 'උපාංග සහ අයකැමියන්', 'Admin only': 'පරිපාලකයාට පමණි', 'Admin email': 'පරිපාලක ඊමේල්', 'Admin password': 'පරිපාලක මුරපදය', 'Unlock': 'විවෘත කරන්න',
   'Wrong admin email or password': 'පරිපාලක ඊමේල් හෝ මුරපදය වැරදියි', 'Waiting for admin approval': 'පරිපාලක අනුමැතිය බලාපොරොත්තුවෙන්', 'Check again': 'නැවත බලන්න',
   'Name this device': 'මේ උපාංගයට නමක් දෙන්න', 'Device name': 'උපාංගයේ නම', 'Continue': 'ඉදිරියට', 'Approve': 'අනුමත කරන්න', 'Remove': 'ඉවත් කරන්න', 'Approved': 'අනුමතයි', 'Waiting': 'බලාපොරොත්තුවෙන්',

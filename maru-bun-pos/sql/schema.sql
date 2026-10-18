@@ -195,8 +195,12 @@ create table if not exists public.devices (
   is_admin    boolean not null default false,
   status      text not null default 'pending' check (status in ('pending','approved')),
   created_at  timestamptz not null default now(),
-  last_seen   timestamptz not null default now()
+  last_seen   timestamptz not null default now(),
+  settings_req    text not null default '',
+  settings_req_at timestamptz
 );
+alter table public.devices add column if not exists settings_req    text not null default '';
+alter table public.devices add column if not exists settings_req_at timestamptz;
 
 create or replace function public.register_device(p_id text, p_name text, p_cashier text, p_email text, p_ua text)
 returns public.devices language plpgsql as $$
