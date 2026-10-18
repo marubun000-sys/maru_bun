@@ -82,3 +82,7 @@ git push -u origin main
 2. Every order gets a **Token No** (1, 2, 3… restarts at 12 midnight Sri Lanka time). Shown on bills, kitchen slip, kitchen cards, Orders page.
 3. Bill lines show `qty × unit price = total`. Extras have their own quantity (Extra Cheese × 2) and print the same way.
 4. Customer WhatsApp numbers typed in POS are saved in the **Customers** tab (visits, total spent, WhatsApp link, CSV export).
+
+## Update 4
+- An unfinished order in POS (items, extras, table, customer, note, discount…) is kept when you open another tab or refresh; it clears only after **Place Order**.
+- **Cashier on duty is now per device** (saved in that phone/computer's browser). Each counter sets its own name; bills print the cashier of the device that made the order. All devices still see every order live.

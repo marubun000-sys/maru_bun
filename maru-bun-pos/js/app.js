@@ -1,5 +1,5 @@
 import { sb, DEMO } from './sb.js';
-import { state, loadSettings, saveSettings } from './state.js';
+import { state, loadSettings, saveSettings, getCashier, setCashier } from './state.js';
 import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen } from './utils.js';
 import { initI18n, setLang, getLang } from './i18n.js';
 import * as pos from './pages/pos.js';
@@ -139,9 +139,9 @@ function startApp() {
   $('#role').value = role(); $('#role').onchange = e => store.set('mb_role', e.target.value);
   $('#logout').onclick = async e => { e.preventDefault(); stopLive(); await sb.auth.signOut(); location.hash = ''; showLogin(); };
   $('#cashier').onclick = async () => {
-    const v = await promptModal({ title: 'Cashier on duty', label: 'Name of the person at the counter now', value: state.settings.cashier || '' });
+    const v = await promptModal({ title: 'Cashier on duty', label: 'Name of the person at the counter now', value: getCashier() });
     if (v === null) return;
-    try { await saveSettings({ cashier: v.trim() }); toast('Cashier updated'); } catch (e) { toast(errMsg(e), 'err'); }
+    setCashier(v); toast('Cashier updated');
   };
   const sbar = $('#soundbar');
   if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
@@ -153,11 +153,15 @@ function startApp() {
   startLive();
   if (!location.hash.startsWith('#/')) location.hash = '#/pos';
   route();
+  if (!getCashier()) {                       // new device: ask who is at this counter
+    promptModal({ title: 'Who is at this counter?', label: 'Cashier name (this device only)', value: '' })
+      .then(v => { if (v && v.trim()) { setCashier(v); toast('Cashier saved for this device'); } });
+  }
 }
 function applyBranding() {
   const s = state.settings;
   const bn = $('#brandName'); if (bn) bn.textContent = s.shop_name;
-  const cn = $('#cashierName'); if (cn) cn.textContent = s.cashier || 'not set';
+  const cn = $('#cashierName'); if (cn) cn.textContent = getCashier() || 'not set';
   document.title = `${s.shop_name} POS`;
 }
 

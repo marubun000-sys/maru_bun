@@ -1,5 +1,5 @@
 import { sb, DEMO } from '../sb.js';
-import { state, saveSettings } from '../state.js';
+import { state, saveSettings, getCashier, setCashier } from '../state.js';
 import { $, esc, num, toast, ico, confirmBox, errMsg } from '../utils.js';
 
 const METHODS = [['cash', 'Cash'], ['card', 'Card'], ['bank', 'Bank Transfer'], ['qr', 'QR Pay']];
@@ -9,8 +9,8 @@ export async function render(root) {
   root.innerHTML = `
   <div class="cols">
     <div class="card"><h2>Counter / Cashier on duty</h2>
-      <label>Name of the person at the counter now<input id="cashier" value="${esc(s.cashier)}" placeholder="e.g. Kasun"></label>
-      <p class="muted small">Printed on every bill. You can also change it from the top bar.</p>
+      <label>Name of the person at the counter now<input id="cashier" value="${esc(getCashier())}" placeholder="e.g. Kasun"></label>
+      <p class="muted small">Printed on every bill made on THIS device. Each phone / counter has its own cashier name, so other devices keep their own. You can also change it from the top bar.</p>
       <button class="btn" data-save="cashier">Save cashier</button>
     </div>
 
@@ -49,7 +49,7 @@ export async function render(root) {
   const save = async (patch, msg = 'Saved') => { try { await saveSettings(patch); toast(msg); } catch (e) { toast(errMsg(e), 'err', 6000); } };
   root.querySelectorAll('[data-save]').forEach(b => b.onclick = () => {
     const k = b.dataset.save;
-    if (k === 'cashier') return save({ cashier: $('#cashier', root).value.trim() }, 'Cashier saved');
+    if (k === 'cashier') { setCashier($('#cashier', root).value); return toast('Cashier saved for this device'); }
     if (k === 'billing') {
       const pm = [...root.querySelectorAll('[data-pm]')].filter(c => c.checked).map(c => c.dataset.pm);
       if (!pm.length) return toast('Select at least one payment method', 'err');

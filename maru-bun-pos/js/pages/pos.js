@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { state } from '../state.js';
+import { state, getCashier } from '../state.js';
 import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone } from '../utils.js';
 import { payLabel, showBillModal, printHTML, billHTML, kotHTML } from '../bill.js';
 
@@ -48,6 +48,15 @@ export async function render(root) {
   </div>`;
 
   let uidn = 0;
+  // ---- unsent order is kept (even if you open another tab or refresh) until Place Order ----
+  const DK = 'mb_pos_draft';
+  const saveDraft = () => {
+    try {
+      if (!cart.length && !['#table', '#cname', '#cphone', '#note'].some(i => $(i) && $(i).value.trim())) return localStorage.removeItem(DK);
+      localStorage.setItem(DK, JSON.stringify({ cart, orderType, discType, discVal, scOn, pay, cash, table: $('#table').value, cname: $('#cname').value, cphone: $('#cphone').value, note: $('#note').value }));
+    } catch { /* ignore */ }
+  };
+  const clearDraft = () => { try { localStorage.removeItem(DK); } catch { /* ignore */ } };
   const lineKey = (it, ads) => ads.length ? it.id + '|x' + (++uidn) : it.id; // lines with extras never merge
   const qtyInCart = id => cart.filter(l => l.item_id === id).reduce((n, l) => n + l.qty, 0);
   const stockLeft = it => (it.track_stock ? it.stock - qtyInCart(it.id) : Infinity);
@@ -150,7 +159,7 @@ export async function render(root) {
       if (addLine(it, ads, q)) m.close();
     };
   }
-  function refreshAll() { renderItems(); renderLines(); renderTotals(); }
+  function refreshAll() { renderItems(); renderLines(); renderTotals(); saveDraft(); }
 
   // ---- place order ----
   async function place() {
@@ -166,7 +175,7 @@ export async function render(root) {
       subtotal: c.sub, discount: c.disc, discount_label: c.disc > 0 ? (discType === 'pct' ? `${discVal}%` : 'LKR') : '',
       service_pct: c.pct, service_charge: c.sc, total: c.total, payment_method: pay,
       cash_received: pay === 'cash' ? got : 0, change_given: pay === 'cash' && got > c.total ? r2(got - c.total) : 0,
-      cashier: s().cashier || '', status: prefs.kitchen ? 'pending' : 'served', served_at: prefs.kitchen ? null : new Date().toISOString(),
+      cashier: getCashier(), status: prefs.kitchen ? 'pending' : 'served', served_at: prefs.kitchen ? null : new Date().toISOString(),
     };
     if (!prefs.kitchen) order.created_at = order.served_at; // same instant = "saved straight as served" (no kitchen alerts)
     try {
@@ -195,7 +204,7 @@ export async function render(root) {
     placing = false; renderTotals();
   }
   function resetOrder() {
-    cart = []; cash = ''; discType = 'pct'; discVal = num(s().discount_pct); scOn = !!s().service_charge_enabled;
+    clearDraft(); cart = []; cash = ''; discType = 'pct'; discVal = num(s().discount_pct); scOn = !!s().service_charge_enabled;
     ['#table', '#cname', '#cphone', '#note'].forEach(id => { $(id).value = ''; });
     $('#dtype').value = 'pct'; $('#dval').value = discVal || ''; $('#sc').checked = scOn;
     refreshAll(); renderPays();
@@ -257,6 +266,23 @@ export async function render(root) {
     renderChips(); renderItems(); renderTotals();
   }
   const offLive = onLive(reloadCatalog, 1200);
+
+  // bring back an unfinished order
+  try {
+    const d = JSON.parse(localStorage.getItem(DK) || 'null');
+    if (d) {
+      cart = (d.cart || []).filter(l => items.some(i => i.id === l.item_id));
+      cart.forEach(l => { if (l.key && l.key.includes('|x')) uidn = Math.max(uidn, parseInt(l.key.split('|x')[1], 10) || 0); });
+      orderType = d.orderType || 'dine_in'; discType = d.discType || 'pct'; discVal = num(d.discVal); scOn = !!d.scOn; pay = d.pay || pay; cash = d.cash || '';
+      $('#table').value = d.table || ''; $('#cname').value = d.cname || ''; $('#cphone').value = d.cphone || ''; $('#note').value = d.note || '';
+      $('#dtype').value = discType; $('#dval').value = discVal || ''; $('#sc').checked = scOn;
+      $$('#typeSeg button', R).forEach(x => x.classList.toggle('on', x.dataset.t === orderType));
+    }
+  } catch { /* ignore */ }
+  ['#table', '#cname', '#cphone', '#note'].forEach(i => $(i, R).addEventListener('input', saveDraft));
+  $('#dval', R).addEventListener('input', saveDraft); $('#dtype', R).addEventListener('change', saveDraft); $('#sc', R).addEventListener('change', saveDraft);
+  $('#typeSeg', R).addEventListener('click', saveDraft); $('#pays', R).addEventListener('click', saveDraft);
+  $('#cashBox', R).addEventListener('input', saveDraft);
 
   renderChips(); renderItems(); renderLines(); renderPays(); renderTotals();
   return () => { window.removeEventListener('settings-changed', onSettings); offLive(); };

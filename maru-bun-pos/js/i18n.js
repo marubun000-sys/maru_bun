@@ -87,6 +87,7 @@ const SI = {
 };
 
 Object.assign(SI, {
+  'Who is at this counter?': 'මේ කවුන්ටරයේ ඉන්නේ කවුද?', 'Cashier name (this device only)': 'කැෂියර් නම (මේ උපාංගයට පමණි)', 'Cashier saved for this device': 'මේ උපාංගයට කැෂියර් සුරැකුණා',
   'Customers': 'පාරිභෝගිකයෝ', 'Token': 'ටෝකන්', 'Table no. (optional)': 'මේස අංකය (අවශ්‍ය නම්)',
   'Visits': 'පැමිණීම්', 'Total spent (LKR)': 'මුළු වියදම (LKR)', 'Last visit': 'අන්තිම පැමිණීම', 'Search name / phone': 'නම / දුරකථන සොයන්න',
   'No customers yet': 'තවම පාරිභෝගිකයෝ නැත',
