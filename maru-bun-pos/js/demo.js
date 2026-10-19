@@ -133,6 +133,10 @@ export function createDemo() {
       ch.unsubscribe = () => listeners.delete(ch._fn);
       return ch;
     },
+    functions: { async invoke(_n, { body }) {
+      if (body.ping) return { data: { configured: true }, error: null };
+      return { data: { results: (body.recipients || []).map(r => (r.phone.endsWith('0') ? { phone: r.phone, ok: false, error: 'Recipient not on WhatsApp' } : { phone: r.phone, ok: true, id: 'demo' })) }, error: null };
+    } },
     storage: { from: bucket => ({
       async upload(path) { return { data: { path }, error: null }; },
       getPublicUrl(path) { return { data: { publicUrl: `https://demo.invalid/storage/v1/object/public/${bucket}/${path}` } }; },

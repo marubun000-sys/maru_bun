@@ -87,6 +87,8 @@ const SI = {
 };
 
 Object.assign(SI, {
+  'How to send': 'යවන ආකාරය', 'Send to everyone automatically': 'හැමෝටම ස්වයංක්‍රීයව යවන්න', 'Send one by one': 'එකිනෙකා වෙන වෙනම යවන්න', 'Who gets it': 'කාටද යවන්නේ',
+  'Everyone': 'හැමෝම', 'Recent customers': 'මෑත පාරිභෝගිකයන්', 'Regular customers': 'නිතිපතා පාරිභෝගිකයන්', 'Retry failed': 'අසාර්ථක ඒවා නැවත යවන්න',
   'Send promotion': 'ප්‍රවර්ධනයක් යවන්න', 'Promos': 'ප්‍රවර්ධන', 'Receives': 'ලැබේ', 'Stopped': 'නවත්වා ඇත', 'Message': 'පණිවිඩය',
   'Photo / poster (optional)': 'ඡායාරූපය / පෝස්ටරය (අවශ්‍ය නම්)', 'Send to': 'යවන්නේ', 'All customers': 'සියලු පාරිභෝගිකයන්', 'Start sending': 'යැවීම අරඹන්න',
   'Skip': 'මඟ හරින්න', 'Stop (continue later)': 'නවත්වන්න (පසුව දිගටම)', 'Unfinished promotion': 'නොනිම් ප්‍රවර්ධනය', 'Continue': 'දිගටම', 'Discard': 'අත්හරින්න',

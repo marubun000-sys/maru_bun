@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
-import { $, esc, fmt, dtstr, toast, ico, errMsg, onLive, downloadCSV, modal, promptModal } from '../utils.js';
+import { $, esc, fmt, dtstr, toast, ico, errMsg, onLive, downloadCSV, modal, promptModal, confirmBox } from '../utils.js';
 
 const PK = 'mb_promo';   // an unfinished promotion (so you can continue after a refresh)
 const loadCamp = () => { try { return JSON.parse(localStorage.getItem(PK) || 'null'); } catch { return null; } };
@@ -47,30 +47,67 @@ export async function render(root) {
   }
 
   // ---------------- send promotion ----------------
+  const TK = 'mb_wa_tpl';
+  const tpl = () => { try { return { name: '', lang: 'en', useName: true, ...JSON.parse(localStorage.getItem(TK) || '{}') }; } catch { return { name: '', lang: 'en', useName: true }; } };
+  async function callApi(body) {
+    const { data, error } = await sb.functions.invoke('send-promo', { body });
+    if (error) {
+      let msg = error.message || 'Could not reach the sending service';
+      try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    return data;
+  }
+
   function openComposer() {
     const s = state.settings, saved = loadCamp(), resume = saved && saved.i < saved.list.length;
-    let imageUrl = '', busy = false;
+    const t0 = tpl();
+    let imageUrl = '', busy = false, apiReady = false;
     const m = modal(`<h3>📣 Send promotion</h3>
       ${resume ? `<div class="card" style="margin-bottom:10px"><b>Unfinished promotion</b> · ${saved.i} of ${saved.list.length} done<div class="row" style="margin-top:8px"><button class="btn sm" id="pResume">Continue</button><button class="btn ghost sm" id="pDrop">Discard</button></div></div>` : ''}
-      <label>Message<textarea id="pText" rows="6">Hi {name}! 🍞 Fresh hot buns are waiting for you at ${esc(s.shop_name)}.\nCome visit us today!\n📍 ${esc(s.address)}</textarea></label>
-      <div class="muted small" style="margin:-4px 0 8px">{name} is replaced with each customer's first name.</div>
-      <label>Photo / poster (optional)<input type="file" id="pFile" accept="image/*"></label>
-      <div id="pPrev" class="muted small"></div>
-      <div class="muted small" style="margin-top:8px">Send to</div>
-      <label class="check"><input type="radio" name="pw" value="all" checked> All customers</label>
-      <label class="check"><input type="radio" name="pw" value="recent"> Visited in the last <input id="pDays" type="number" min="1" value="30" style="width:80px;display:inline-block"> days</label>
-      <label class="check"><input type="radio" name="pw" value="loyal"> At least <input id="pVis" type="number" min="1" value="2" style="width:80px;display:inline-block"> visits</label>
-      <div style="margin:8px 0"><span class="pill info" id="pCount"></span></div>
-      <p class="muted small">WhatsApp does not allow apps to send to many people automatically. Next you tap one button per customer and press Send in WhatsApp. People marked <b>Stopped</b> are skipped.</p>
-      <div class="row end"><button class="btn ghost" id="pCancel">Cancel</button><button class="btn" id="pGo">Start sending</button></div>`, { wide: true });
 
+      <div class="step-h">1 · How to send</div>
+      <label class="opt" id="optAuto"><input type="radio" name="pm" value="auto"><span><b>Send to everyone automatically</b><small id="autoNote">Checking…</small></span></label>
+      <label class="opt"><input type="radio" name="pm" value="manual" checked><span><b>Send one by one</b><small>Works with your normal WhatsApp. You tap once per customer, then press Send in WhatsApp.</small></span></label>
+
+      <div class="step-h">2 · Message</div>
+      <div id="pManual"><textarea id="pText" rows="5">Hi {name}! 🍞 Fresh hot buns are waiting for you at ${esc(s.shop_name)}.\nCome visit us today!\n📍 ${esc(s.address)}</textarea>
+        <div class="muted small" style="margin-top:4px">{name} is replaced with each customer's first name.</div></div>
+      <div id="pAuto" hidden>
+        <div style="display:grid;grid-template-columns:1fr 110px;gap:10px"><label>Template name<input id="tName" placeholder="e.g. hot_bun_promo" value="${esc(t0.name)}" autocapitalize="off"></label>
+        <label>Language<input id="tLang" placeholder="en" value="${esc(t0.lang)}"></label></div>
+        <label class="check"><input type="checkbox" id="tUseName" ${t0.useName ? 'checked' : ''}> My template has <b>{{1}}</b> = customer's first name</label>
+        <div class="muted small">WhatsApp only allows an <b>approved template</b> for messages to many people. Create it once in Meta (see README → WhatsApp automatic sending). The text is written inside the template.</div></div>
+
+      <div class="step-h">3 · Photo / poster (optional)</div>
+      <input type="file" id="pFile" accept="image/*"><div id="pPrev" class="muted small"></div>
+
+      <div class="step-h">4 · Who gets it</div>
+      <label class="opt"><input type="radio" name="pw" value="all" checked><span><b>Everyone</b><small>All saved customers</small></span></label>
+      <label class="opt"><input type="radio" name="pw" value="recent"><span><b>Recent customers</b><small>Visited in the last <input id="pDays" type="number" min="1" value="30"> days</small></span></label>
+      <label class="opt"><input type="radio" name="pw" value="loyal"><span><b>Regular customers</b><small>At least <input id="pVis" type="number" min="1" value="2"> visits</small></span></label>
+      <div style="margin:10px 0 4px"><span class="pill info" id="pCount"></span> <span class="muted small">(customers marked <b>Stopped</b> are never included)</span></div>
+
+      <div class="row end" style="margin-top:12px"><button class="btn ghost" id="pCancel">Cancel</button><button class="btn" id="pGo">Start sending</button></div>`, { wide: true });
+
+    const mode = () => (m.el.querySelector('input[name=pm]:checked') || {}).value;
+    const paint = () => { const auto = mode() === 'auto'; $('#pManual', m.el).hidden = auto; $('#pAuto', m.el).hidden = !auto; };
     const pick = () => {
       const w = (m.el.querySelector('input[name=pw]:checked') || {}).value;
       const days = Number($('#pDays', m.el).value) || 30, vis = Number($('#pVis', m.el).value) || 2;
       return rows.filter(r => !r.opt_out && (w === 'all' || (w === 'recent' && Date.now() - new Date(r.last_visit) <= days * 864e5) || (w === 'loyal' && r.visits >= vis)));
     };
     const count = () => { $('#pCount', m.el).textContent = `${pick().length} customers will get it`; };
-    m.el.addEventListener('input', count); m.el.addEventListener('change', count); count();
+    m.el.addEventListener('input', count); m.el.addEventListener('change', e => { count(); if (e.target.name === 'pm') paint(); });
+    count(); paint();
+
+    // is the automatic sender set up?
+    (async () => {
+      const note = $('#autoNote', m.el), radio = m.el.querySelector('input[value=auto]');
+      try { const r = await callApi({ ping: true }); apiReady = !!(r && r.configured); } catch { apiReady = false; }
+      if (apiReady) { note.textContent = 'Uses your WhatsApp Business account · all customers in one go · photo included'; radio.checked = true; paint(); }
+      else { note.innerHTML = 'Not set up yet. See README → <b>WhatsApp automatic sending</b> (needs a Meta WhatsApp Business account).'; radio.disabled = true; $('#optAuto', m.el).classList.add('off'); }
+    })();
 
     $('#pCancel', m.el).onclick = () => m.close();
     if (resume) {
@@ -87,20 +124,58 @@ export async function render(root) {
         const { error } = await sb.storage.from('promos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
         if (error) throw error;
         imageUrl = sb.storage.from('promos').getPublicUrl(path).data.publicUrl;
-        $('#pPrev', m.el).innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="" style="max-width:100%;max-height:200px;border-radius:10px;display:block;margin-top:6px"><span class="pill ok">Photo ready – its link is added to the message</span>`;
+        $('#pPrev', m.el).innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="" style="max-width:100%;max-height:200px;border-radius:10px;display:block;margin:6px 0"><span class="pill ok">Photo ready</span>`;
       } catch (err) {
         $('#pPrev', m.el).innerHTML = `<div class="err">${esc(errMsg(err))}<br><small>Run sql/update-6.sql in the Supabase SQL Editor first.</small></div>`; e.target.value = '';
       }
       busy = false; $('#pGo', m.el).disabled = false;
     };
-    $('#pGo', m.el).onclick = () => {
+    $('#pGo', m.el).onclick = async () => {
       if (busy) return;
-      const text = $('#pText', m.el).value.trim(); if (!text) return toast('Write a message first', 'err');
       const l = pick().map(r => ({ phone: r.phone, name: r.name || '' }));
       if (!l.length) return toast('No customers match', 'err');
+      if (mode() === 'auto') {
+        const name = $('#tName', m.el).value.trim(), lang = $('#tLang', m.el).value.trim() || 'en', useName = $('#tUseName', m.el).checked;
+        if (!/^[a-z0-9_]+$/.test(name)) return toast('Template name: lowercase letters, numbers and _ only', 'err', 5000);
+        try { localStorage.setItem(TK, JSON.stringify({ name, lang, useName })); } catch { /* ignore */ }
+        if (!await confirmBox(`Send the "${name}" message${imageUrl ? ' with your photo' : ''} to ${l.length} customers now? WhatsApp may charge your business account for each message.`, `Send to ${l.length}`, false)) return;
+        m.close(); return openAutoSender({ template: name, lang, useName, imageUrl, list: l });
+      }
+      const text = $('#pText', m.el).value.trim(); if (!text) return toast('Write a message first', 'err');
       saveCamp({ text: text + (imageUrl ? '\n\n' + imageUrl : ''), list: l, i: 0 });
       m.close(); openSender();
     };
+  }
+
+  // automatic sending through the Edge Function (WhatsApp Business Cloud API)
+  function openAutoSender(job) {
+    const m = modal('<div id="as"></div>', { wide: true });
+    let todo = job.list.slice(), sent = 0, failed = [], running = false, stop = false;
+    const box = () => $('#as', m.el);
+    function draw(final = false) {
+      const total = job.list.length, done = sent + failed.length;
+      box().innerHTML = `<h3>${final ? (failed.length ? 'Finished with problems' : 'All sent ✓') : '📣 Sending…'}</h3>
+        <div style="height:8px;border-radius:8px;background:var(--panel2);overflow:hidden;margin:8px 0"><div style="height:100%;width:${Math.round(done / total * 100)}%;background:var(--gold)"></div></div>
+        <div class="row"><span class="pill ok">${sent} sent</span><span class="pill ${failed.length ? 'bad' : ''}">${failed.length} failed</span><span class="muted small">${done} of ${total}</span></div>
+        ${failed.length && final ? `<div class="card" style="margin-top:10px;max-height:180px;overflow:auto"><b>Not sent</b>${failed.map(f => `<div class="small">+${esc(f.phone)} — <span class="muted">${esc(f.error)}</span></div>`).join('')}</div>` : ''}
+        <div class="row end" style="margin-top:12px">${final && failed.length ? '<button class="btn" id="aRetry">Retry failed</button>' : ''}${final ? '' : '<button class="btn ghost" id="aStop">Stop</button>'}<button class="btn ghost" id="aClose">Close</button></div>`;
+      $('#aClose', m.el).onclick = () => { stop = true; m.close(); };
+      if ($('#aStop', m.el)) $('#aStop', m.el).onclick = () => { stop = true; };
+      if ($('#aRetry', m.el)) $('#aRetry', m.el).onclick = () => { todo = failed.map(f => ({ phone: f.phone, name: (job.list.find(x => x.phone === f.phone) || {}).name || '' })); failed = []; run(); };
+    }
+    async function run() {
+      if (running) return; running = true; stop = false; draw();
+      while (todo.length && !stop) {
+        const chunk = todo.splice(0, 20);
+        try {
+          const r = await callApi({ template: job.template, lang: job.lang, useName: job.useName, imageUrl: job.imageUrl, recipients: chunk });
+          (r.results || []).forEach(x => (x.ok ? sent++ : failed.push(x)));
+        } catch (e) { chunk.forEach(c => failed.push({ phone: c.phone, error: e.message })); if (/not set up|Not signed in/i.test(e.message)) { todo = []; } }
+        draw();
+      }
+      running = false; draw(true);
+    }
+    run();
   }
 
   function openSender() {

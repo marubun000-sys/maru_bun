@@ -105,3 +105,17 @@ Note: this is an app-level gate for staff devices (the Supabase login itself is 
 1. **Run `sql/update-6.sql`** once (adds the `opt_out` column and a public photo bucket `promos`).
 2. Customers tab → **Send promotion**: write a message ({name} = customer's first name), add a photo (its link is added to the message, WhatsApp shows a preview), choose who gets it (all / visited in the last N days / at least N visits), then tap **Open WhatsApp** once per customer and press Send. Progress is saved if you stop.
 3. Customers marked **Stopped** (tap the Promos pill) are skipped. WhatsApp does not allow fully automatic bulk sending without its paid Business API, and sending to people who did not agree can get a number banned.
+
+## Update 8 – send a promotion to ALL customers automatically (WhatsApp Business API)
+WhatsApp does not let any app send to many people from your normal WhatsApp. The only official way is the **WhatsApp Business Cloud API** (Meta). The app is ready for it; you must set up Meta once. (Not tested against a real Meta account – test with 1–2 of your own numbers first.)
+
+**One-time setup**
+1. Meta Business account → developers.facebook.com → create an app (type Business) → add the **WhatsApp** product.
+2. Add a phone number for the shop (a number that is not already used in the WhatsApp app, or use Meta's coexistence option). Note the **Phone number ID**.
+3. Create a **permanent access token** (Business settings → System users → add → generate token with `whatsapp_business_messaging` + `whatsapp_business_management`).
+4. WhatsApp Manager → **Message templates → Create template**: category **Marketing**, header **Image**, body e.g. `Hi {{1}}! 🍞 Fresh hot buns at මරු Bun today. Come visit us!`. Wait until it says **Approved**.
+5. Supabase → **Edge Functions → Deploy a new function → Via Editor**, name it exactly `send-promo`, paste the code of `supabase/functions/send-promo/index.ts`, Deploy.
+6. Supabase → Edge Functions → **Secrets**: add `WA_TOKEN` (the token) and `WA_PHONE_ID` (the Phone number ID).
+7. Run `sql/update-6.sql` (photo storage) if you have not.
+
+**Using it**: Customers → Send promotion → *Send to everyone automatically* (it turns on by itself once the function and secrets exist) → template name + language, add the photo, choose who → Start. Failed numbers are listed with the reason and can be retried. Meta charges per marketing message and only people who have WhatsApp will receive it; send only to customers who agreed.
