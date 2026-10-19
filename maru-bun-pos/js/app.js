@@ -3,7 +3,7 @@ import { state, loadSettings, saveSettings, getCashier, setCashier } from './sta
 import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen, modal } from './utils.js';
 import { initI18n, setLang, getLang } from './i18n.js';
 import { reopenBill } from './bill.js';
-import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, forgetDevice, amAdmin, deviceId, answerSettings, fresh } from './device.js';
+import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, amAdmin, deviceId, answerSettings, fresh } from './device.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
 import * as customers from './pages/customers.js';
@@ -152,16 +152,20 @@ async function deviceGate(user) {
   });
 }
 async function removedScreen(msg = 'The admin removed this device.') {
-  stopLive(); forgetDevice();
+  stopLive();                                      // keep this device's id: if it is approved again (or it is the admin row) it is recognised
   try { await sb.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
   loginShell(`<div class="err" style="text-align:center">${esc(msg)}</div>
     <p class="muted" style="text-align:center">To use the POS on this device again, sign in and ask the admin to approve it.</p>
     <button class="btn big" id="back">Back to sign in</button>`);
   $('#back').onclick = () => { location.hash = ''; showLogin(); };
 }
+let nullStreak = 0;
 async function deviceWatch() {
+  if (!state.user) return;                                       // signed out -> nothing to check (a signed-out read looks like "device removed")
+  try { const { data } = await sb.auth.getSession(); if (!data || !data.session) return; } catch { return; }
   const d = await fetchMe();
-  if (d === null) return removedScreen();
+  if (d === null) { if (++nullStreak < 2) return; nullStreak = 0; return removedScreen(); }   // must be missing twice in a row
+  nullStreak = 0;
   checkRequests();
 }
 
@@ -271,6 +275,7 @@ function applyBranding() {
 
 async function route() {
   const id = (location.hash.match(/^#\/(\w+)/) || [])[1] || 'pos';
+  if (!$('#pageTitle') || !$('#page')) return;                    // login / device screen is showing, not the app
   const pg = PAGES.find(p => p.id === id) || PAGES[0];
   const token = ++routeToken;
   if (typeof cleanup === 'function') { try { cleanup(); } catch { /* ignore */ } }
