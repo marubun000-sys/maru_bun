@@ -286,3 +286,13 @@ button.pill{cursor:pointer;font-family:inherit}
 .kscreen .kcard.late{animation:klate 1.4s ease-in-out infinite}
 @keyframes klate{50%{box-shadow:0 0 0 3px rgba(255,90,90,.55)}}
 .kscreen .card.empty{font-size:22px;padding:60px}
+
+.cal{max-width:300px;margin:0 0 12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal-g em{font-style:normal;font-size:11px;color:var(--muted)}
+.cal-g button{border:1px solid transparent;background:transparent;color:var(--text);border-radius:8px;padding:7px 0;cursor:pointer;font:inherit;font-size:13px}
+.cal-g button:hover{border-color:var(--line)}
+.cal-g button.tod{font-weight:700;text-decoration:underline}
+.cal-g button.has{background:rgba(255,90,90,.22);color:var(--bad);font-weight:700}
+.cal-g button.sel{outline:2px solid var(--gold)}
+.cal-dot{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(255,90,90,.45);vertical-align:middle}
