@@ -87,7 +87,7 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'No refunds 👍': 'ආපසු දීම් නැත 👍',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', '✔ Added back': '✔ තොගයට එකතු කළා', '✖ Not added back': '✖ තොගයට එකතු කළේ නැත', 'No refunds 👍': 'ආපසු දීම් නැත 👍',
   'Refund': 'මුදල් ආපසු', 'Change type / payment': 'වර්ගය / ගෙවීම වෙනස් කරන්න', '↗ Open as kitchen screen': '↗ කුස්සි තිරයක් ලෙස විවෘත කරන්න', 'Refund everything left': 'ඉතිරි සියල්ල ආපසු දෙන්න',
   'Reason (optional)': 'හේතුව (අවශ්‍ය නම්)', 'Put the refunded items back in stock': 'ආපසු දුන් අයිතම තොගයට එකතු කරන්න', 'Admin approval needed': 'පරිපාලක අනුමැතිය අවශ්‍යයි',
   'Recently served': 'මෑතදී සේවය කළ', 'Edited': 'වෙනස් කළා', 'Part refund': 'කොටසක් ආපසු', 'Refunded': 'ආපසු දුන්',

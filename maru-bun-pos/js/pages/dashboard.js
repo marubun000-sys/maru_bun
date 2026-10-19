@@ -51,20 +51,22 @@ export async function render(root) {
 
       // refunded items (by the day the refund was made)
       const refunded = since => {
-        const m = {}; let total = 0, n = 0;
+        const rows = []; let total = 0, n = 0;
         orders.forEach(o => (o.refunds || []).forEach(rf => {
           if (!since(rf.at)) return;
           n++; total += Number(rf.amount) || 0;
-          (rf.items || []).forEach(it => { const r = (m[it.name] = m[it.name] || { name: it.name, qty: 0, amt: 0, back: false }); r.qty += Number(it.qty) || 0; r.amt += Number(it.amount) || 0; if (rf.restock) r.back = true; });
+          (rf.items || []).forEach(it => rows.push({ at: rf.at, name: it.name, qty: Number(it.qty) || 0, amt: Number(it.amount) || 0, back: !!rf.restock, why: rf.reason || '', by: rf.by || '', tok: o.token_no }));
         }));
-        return { rows: Object.values(m).sort((a, b) => b.qty - a.qty), total, n };
+        rows.sort((a, b) => (a.at < b.at ? 1 : -1));
+        return { rows, total, n };
       };
       const refToday = refunded(at => dstr(at) === today), refMonth = refunded(at => at >= mFrom);
       const refTable = () => {
         const r = range === 'today' ? refToday : refMonth;
-        return r.n ? `<div class="row wrap" style="margin-bottom:8px"><span class="pill bad">${r.n} refund${r.n > 1 ? 's' : ''}</span><span class="pill bad">${money(r.total)} refunded</span></div>
-          <div class="tbl-wrap"><table><thead><tr><th>Item</th><th class="r">Qty refunded</th><th class="r">Amount</th><th>Stock</th></tr></thead><tbody>
-          ${r.rows.map(x => `<tr><td><b>${esc(x.name)}</b></td><td class="r">${x.qty}</td><td class="r">${fmt(x.amt)}</td><td>${x.back ? '<span class="pill ok">Added back</span>' : '<span class="muted small">not added</span>'}</td></tr>`).join('')}
+        const lost = r.rows.filter(x => !x.back).length;
+        return r.n ? `<div class="row wrap" style="margin-bottom:8px"><span class="pill bad">${r.n} refund${r.n > 1 ? 's' : ''}</span><span class="pill bad">${money(r.total)} refunded</span>${lost ? `<span class="pill bad">✖ ${lost} not added back</span>` : ''}</div>
+          <div class="tbl-wrap"><table><thead><tr><th>Item</th><th class="r">Qty refunded</th><th class="r">Amount</th><th>Stock</th><th>Reason</th></tr></thead><tbody>
+          ${r.rows.map(x => `<tr${x.back ? '' : ' style="background:rgba(255,90,90,.12);color:var(--bad)"'}><td><b>${esc(x.name)}</b>${x.tok ? ` <span class="muted small">#${esc(x.tok)}</span>` : ''}<div class="muted small">${esc(new Date(x.at).toLocaleString('en-GB', { timeZone: 'Asia/Colombo', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))}${x.by ? ' · ' + esc(x.by) : ''}</div></td><td class="r">${x.qty}</td><td class="r">${fmt(x.amt)}</td><td>${x.back ? '<span class="pill ok">✔ Added back</span>' : '<span class="pill bad">✖ Not added back</span>'}</td><td>${x.why ? esc(x.why) : '<span class="muted small">—</span>'}</td></tr>`).join('')}
           </tbody></table></div>` : '<div class="empty">No refunds 👍</div>';
       };
 
