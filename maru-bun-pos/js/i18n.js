@@ -87,6 +87,9 @@ const SI = {
 };
 
 Object.assign(SI, {
+  'Refund': 'මුදල් ආපසු', 'Change type / payment': 'වර්ගය / ගෙවීම වෙනස් කරන්න', '↗ Open as kitchen screen': '↗ කුස්සි තිරයක් ලෙස විවෘත කරන්න', 'Refund everything left': 'ඉතිරි සියල්ල ආපසු දෙන්න',
+  'Reason (optional)': 'හේතුව (අවශ්‍ය නම්)', 'Put the refunded items back in stock': 'ආපසු දුන් අයිතම තොගයට එකතු කරන්න', 'Admin approval needed': 'පරිපාලක අනුමැතිය අවශ්‍යයි',
+  'Recently served': 'මෑතදී සේවය කළ', 'Edited': 'වෙනස් කළා', 'Part refund': 'කොටසක් ආපසු', 'Refunded': 'ආපසු දුන්',
   'How to send': 'යවන ආකාරය', 'Send to everyone automatically': 'හැමෝටම ස්වයංක්‍රීයව යවන්න', 'Send one by one': 'එකිනෙකා වෙන වෙනම යවන්න', 'Who gets it': 'කාටද යවන්නේ',
   'Everyone': 'හැමෝම', 'Recent customers': 'මෑත පාරිභෝගිකයන්', 'Regular customers': 'නිතිපතා පාරිභෝගිකයන්', 'Retry failed': 'අසාර්ථක ඒවා නැවත යවන්න',
   'Send promotion': 'ප්‍රවර්ධනයක් යවන්න', 'Promos': 'ප්‍රවර්ධන', 'Receives': 'ලැබේ', 'Stopped': 'නවත්වා ඇත', 'Message': 'පණිවිඩය',

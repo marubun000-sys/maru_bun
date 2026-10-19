@@ -2,6 +2,11 @@
   publish = "."
   command = ""
 
+[[redirects]]
+  from = "/kitchen"
+  to = "/kitchen.html"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

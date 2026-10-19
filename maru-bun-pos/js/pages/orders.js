@@ -1,6 +1,7 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive, lineRows } from '../utils.js';
+import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive, lineRows, netTotal } from '../utils.js';
 import { showBillModal, typeLabel, payLabel } from '../bill.js';
+import { openEdit, openRefund } from '../refund.js';
 
 export async function render(root) {
   let mode = 'today', ym = ymOf(), day = dstr(new Date()), search = '', ftype = '', fpay = '';
@@ -21,7 +22,7 @@ export async function render(root) {
     <div id="daily"></div>
     <div class="tbl-wrap"><table><thead><tr><th>Token</th><th>Bill</th><th>Date & time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Status</th><th class="r">Total (LKR)</th></tr></thead><tbody id="rows"></tbody></table></div>`;
 
-  const sum = arr => arr.reduce((n, o) => n + Number(o.total || 0), 0);
+  const sum = arr => arr.reduce((n, o) => n + netTotal(o), 0);
 
   async function load() {
     $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Loading…</td></tr>';
@@ -54,7 +55,7 @@ export async function render(root) {
     // daily breakdown for month view
     if (mode === 'month') {
       const by = {};
-      view.forEach(o => { const k = dstr(o.created_at); (by[k] = by[k] || { n: 0, t: 0 }); by[k].n++; by[k].t += Number(o.total || 0); });
+      view.forEach(o => { const k = dstr(o.created_at); (by[k] = by[k] || { n: 0, t: 0 }); by[k].n++; by[k].t += netTotal(o); });
       const days = Object.keys(by).sort().reverse();
       $('#daily').innerHTML = days.length ? `<details class="card" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">Daily sales for ${ym} (${days.length} days)</summary>
         <div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Date</th><th class="r">Bills</th><th class="r">Sales (LKR)</th></tr></thead><tbody>
@@ -66,8 +67,16 @@ export async function render(root) {
       <td>${esc(o.customer_name || '—')}${o.customer_phone ? `<div class="muted small">${esc(o.customer_phone)}</div>` : ''}</td>
       <td><span class="pill ${o.order_type === 'takeaway' ? 'info' : ''}">${typeLabel(o.order_type)}</span></td>
       <td>${payLabel(o.payment_method)}</td>
-      <td><span class="pill ${o.status === 'served' ? 'ok' : 'warn'}">${o.status === 'served' ? 'Served' : 'In kitchen'}</span></td>
-      <td class="r"><b>${fmt(o.total)}</b></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No bills found</td></tr>';
+      <td><span class="pill ${o.status === 'served' ? 'ok' : 'warn'}">${o.status === 'served' ? 'Served' : 'In kitchen'}</span>${Number(o.refund_total) > 0 ? ` <span class="pill bad">${netTotal(o) <= 0 ? 'Refunded' : 'Part refund'}</span>` : ''}${(o.edits || []).length ? ` <span class="pill info" title="${esc(o.edits.map(e => (e.by || '') + ': ' + e.text).join(' | '))}">Edited</span>` : ''}</td>
+      <td class="r"><b>${fmt(netTotal(o))}</b>${Number(o.refund_total) > 0 ? `<div class="muted small">bill ${fmt(o.total)} · refund -${fmt(o.refund_total)}</div>` : ''}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">No bills found</td></tr>';
+  }
+
+  const manage = { edit: x => openEdit(x, reopen), refund: x => openRefund(x, reopen) };
+  const openBill = x => showBillModal(x, { manage });
+  async function reopen(id) {                         // after a change: refresh the list and show the updated bill again
+    load();
+    const { data } = await sb.from('orders').select('*').eq('id', id).maybeSingle();
+    if (data) openBill(data);
   }
 
   $('#seg', root).onclick = e => {
@@ -80,12 +89,12 @@ export async function render(root) {
   $('#s', root).oninput = e => { search = e.target.value.trim(); draw(); };
   $('#ft', root).onchange = e => { ftype = e.target.value; draw(); };
   $('#fp', root).onchange = e => { fpay = e.target.value; draw(); };
-  $('#rows', root).onclick = e => { const tr = e.target.closest('tr[data-id]'); if (!tr) return; const o = view.find(x => x.id === tr.dataset.id); if (o) showBillModal(o); };
+  $('#rows', root).onclick = e => { const tr = e.target.closest('tr[data-id]'); if (!tr) return; const o = view.find(x => x.id === tr.dataset.id); if (o) openBill(o); };
   $('#csv', root).onclick = () => {
     const list = filtered(); if (!list.length) return toast('Nothing to export', 'err');
     downloadCSV(`bills-${mode === 'month' ? ym : mode === 'date' ? day : dstr(new Date())}.csv`, [
-      ['Token', 'Bill', 'Date', 'Time', 'Customer', 'Phone', 'Type', 'Table', 'Payment', 'Subtotal', 'Discount', 'Service charge', 'Total', 'Cashier', 'Status', 'Items'],
-      ...list.map(o => [o.token_no || '', billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.cashier, o.status, (o.items || []).map(i => { const r = lineRows(i); return `${r.qty}x ${r.name} @${r.unit}` + r.extras.map(e => ` +${e.qty}x ${e.name}`).join(''); }).join('; ')]),
+      ['Token', 'Bill', 'Date', 'Time', 'Customer', 'Phone', 'Type', 'Table', 'Payment', 'Subtotal', 'Discount', 'Service charge', 'Total', 'Refunded', 'Cashier', 'Status', 'Items'],
+      ...list.map(o => [o.token_no || '', billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.refund_total || 0, o.cashier, o.status, (o.items || []).map(i => { const r = lineRows(i); return `${r.qty}x ${r.name} @${r.unit}` + r.extras.map(e => ` +${e.qty}x ${e.name}`).join(''); }).join('; ')]),
     ]);
   };
 

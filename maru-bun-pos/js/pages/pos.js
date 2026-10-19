@@ -204,7 +204,7 @@ export async function render(root) {
       if (prefs.kot) slips.push(kotHTML(data));
       if (prefs.bill) slips.push(billHTML(data));
       if (slips.length) printHTML(...slips);
-      showBillModal(data, { title: `Order placed · Bill ${'MB-' + String(data.bill_no).padStart(5, '0')}` });
+      showBillModal(data, { title: `Order placed · Bill ${'MB-' + String(data.bill_no).padStart(5, '0')}`, keep: true });
     } catch (e) { console.error(e); toast('Could not save order: ' + errMsg(e), 'err', 6000); }
     placing = false; renderTotals();
   }

@@ -266,3 +266,23 @@ button.pill{cursor:pointer;font-family:inherit}
 .opt small input[type=number]{width:68px;display:inline-block;padding:3px 8px;margin:0 3px;vertical-align:middle}
 .opt.off{opacity:.65;cursor:not-allowed}
 .opt small b{display:inline;font-size:inherit;color:var(--text)}
+
+/* ---- separate kitchen monitor page ---- */
+.kscreen{min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
+.ks-top{display:flex;align-items:center;gap:14px;padding:10px 22px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.ks-top img{height:42px;width:42px;border-radius:10px;object-fit:cover}
+.ks-top b{font-size:20px}
+.ks-title{color:var(--gold);font-weight:600;font-size:18px}
+.ks-top .spacer{flex:1}
+.ks-count{font-size:16px;padding:6px 16px}
+.kscreen .page{padding:18px 22px;flex:1}
+.kscreen .kgrid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.kscreen .kcard{padding:18px;gap:10px}
+.kscreen .kcard .kh b{font-size:26px}
+.kscreen .kcard li{font-size:24px;padding:8px 0}
+.kscreen .kcard li small{font-size:18px}
+.kscreen .kcard .btn{font-size:18px;padding:14px 18px}
+.kscreen .knote{font-size:18px}
+.kscreen .kcard.late{animation:klate 1.4s ease-in-out infinite}
+@keyframes klate{50%{box-shadow:0 0 0 3px rgba(255,90,90,.55)}}
+.kscreen .card.empty{font-size:22px;padding:60px}

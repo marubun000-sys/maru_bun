@@ -37,6 +37,7 @@ export function lineRows(l) {
   const unit = legacy ? r2(num(l.unit) - ad.reduce((n, a) => n + num(a.price), 0)) : num(l.unit);
   return { name: l.name, qty: num(l.qty), unit, total: r2(unit * num(l.qty)), extras };
 }
+export const netTotal = o => r2(num(o.total) - num(o.refund_total));
 export const lineTotal = l => { const r = lineRows(l); return r2(r.total + r.extras.reduce((n, e) => n + e.total, 0)); };
 // Sri Lankan numbers -> international format for wa.me (0771234567 -> 94771234567)
 export function normPhone(p) {
@@ -119,14 +120,14 @@ export function beep(kind = 'new') {
 }
 
 // ---------- modals ----------
-export function modal(html, { wide = false, onClose } = {}) {
+export function modal(html, { wide = false, onClose, outside = true } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true"><button class="modal-x" aria-label="Close">${ico('x', 20)}</button>${html}</div>`;
   document.body.appendChild(wrap);
   let closed = false;
   const close = () => { if (closed) return; closed = true; wrap.remove(); onClose && onClose(); };
-  wrap.addEventListener('mousedown', e => { if (e.target === wrap) close(); });
+  if (outside) wrap.addEventListener('mousedown', e => { if (e.target === wrap) close(); });
   wrap.querySelector('.modal-x').onclick = close;
   return { el: wrap.querySelector('.modal'), close };
 }

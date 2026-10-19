@@ -250,6 +250,11 @@ create policy "promos staff read" on storage.objects for select to authenticated
 drop policy if exists "promos staff delete" on storage.objects;
 create policy "promos staff delete" on storage.objects for delete to authenticated using (bucket_id = 'promos');
 
+-- ======== Update 7: refunds ========
+alter table public.orders add column if not exists refund_total numeric(12,2) not null default 0;   -- total money refunded
+alter table public.orders add column if not exists refunds      jsonb         not null default '[]'; -- list of refunds (items, amount, reason, who, when)
+alter table public.orders add column if not exists edits        jsonb         not null default '[]'; -- who changed type / payment, and when
+
 -- ---------- Sample menu (edit / delete from Menu Management) ----------
 insert into public.categories (name, sort)
 select * from (values ('Hot Buns',1),('Drinks',2),('Sides',3)) v(name,sort)

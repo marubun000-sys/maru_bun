@@ -3,13 +3,14 @@ import { state } from '../state.js';
 import { $, esc, billNo, tstr, dayRange, toast, beep, ico, errMsg, onLive, noKitchen, lineRows } from '../utils.js';
 import { kotHTML, printHTML, typeLabel } from '../bill.js';
 
-export async function render(root) {
-  root.innerHTML = `<div class="page-head"><h1>Kitchen Display</h1><div class="spacer"></div>
-      <button class="btn ghost sm" id="snd">${ico('bell', 14)} Test sound</button></div>
+export async function render(root, opts = {}) {
+  root.innerHTML = `${opts.screen ? '' : `<div class="page-head"><h1>Kitchen Display</h1><div class="spacer"></div>
+      <a class="btn ghost sm" href="kitchen.html" target="_blank" rel="noopener">↗ Open as kitchen screen</a>
+      <button class="btn ghost sm" id="snd">${ico('bell', 14)} Test sound</button></div>`}
     <div id="pending"></div>
-    <h2 style="margin-top:22px" class="muted">Served today</h2>
+    <h2 style="margin-top:22px" class="muted">${opts.screen ? 'Recently served' : 'Served today'}</h2>
     <div id="served"></div>`;
-  $('#snd', root).onclick = () => beep('new');
+  if ($('#snd', root)) $('#snd', root).onclick = () => beep('new');
 
   let pending = [], served = [], busy = false;
   const mins = o => Math.max(0, Math.floor((Date.now() - new Date(o.created_at)) / 60000));

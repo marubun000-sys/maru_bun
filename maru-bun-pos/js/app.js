@@ -2,6 +2,7 @@ import { sb, DEMO } from './sb.js';
 import { state, loadSettings, saveSettings, getCashier, setCashier } from './state.js';
 import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen, modal } from './utils.js';
 import { initI18n, setLang, getLang } from './i18n.js';
+import { reopenBill } from './bill.js';
 import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, forgetDevice, amAdmin, deviceId, answerSettings, fresh } from './device.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
@@ -112,7 +113,7 @@ async function boot() {
   await loadSettings();
   if (!(await deviceGate(session.user))) return;
   state.user = session.user;
-  startApp();
+  if (SCREEN === 'kitchen') startKitchenScreen(); else startApp();
 }
 
 // =====================================================================
@@ -123,7 +124,7 @@ async function deviceGate(user) {
   if (!name) {
     name = await new Promise(res => {
       loginShell(`<p class="muted" style="text-align:center">Name this device<br><small>e.g. Counter 1, Kitchen tablet, Owner phone</small></p>
-        <form id="nf"><label>Device name<input id="dn" required maxlength="40" value="${esc(guessName())}"></label><button class="btn big">Continue</button></form>
+        <form id="nf"><label>Device name<input id="dn" required maxlength="40" value="${esc(SCREEN === 'kitchen' ? 'Kitchen screen' : guessName())}"></label><button class="btn big">Continue</button></form>
         <p style="text-align:center"><a href="#" id="so" class="muted">Sign out</a></p>`);
       $('#dn').select();
       $('#so').onclick = async e => { e.preventDefault(); await sb.auth.signOut({ scope: 'local' }); showLogin(); res(null); };
@@ -190,7 +191,8 @@ window.addEventListener('data-changed', () => { clearTimeout(checkRequests.t); c
 // =====================================================================
 //  Shell
 // =====================================================================
-const role = () => store.get('mb_role', 'both');
+const SCREEN = document.body.dataset.screen || '';          // 'kitchen' = the separate kitchen monitor page (kitchen.html)
+const role = () => (SCREEN === 'kitchen' ? 'kitchen' : store.get('mb_role', 'both'));
 
 function startApp() {
   app.innerHTML = `<div class="shell">
@@ -227,16 +229,44 @@ function startApp() {
   startLive();
   if (!location.hash.startsWith('#/')) location.hash = '#/pos';
   route();
+  reopenBill();
   if (!getCashier()) {                       // new device: ask who is at this counter
     promptModal({ title: 'Who is at this counter?', label: 'Cashier name (this device only)', value: '' })
       .then(v => { if (v && v.trim()) { setCashier(v); toast('Cashier saved for this device'); } });
   }
 }
+// ---------- the separate kitchen monitor page ----------
+async function mountKitchen() {
+  if (typeof cleanup === 'function') { try { cleanup(); } catch { /* ignore */ } }
+  cleanup = await kitchen.render($('#page'), { screen: true });
+}
+function startKitchenScreen() {
+  app.innerHTML = `<div class="kscreen">
+    <header class="ks-top"><img src="assets/logo.jpg" alt=""><b id="brandName"></b><span class="ks-title">Kitchen Display</span><div class="spacer"></div>
+      <span class="pill ok ks-count" id="ksCount">All clear</span><span class="clock" id="clock" data-noi18n></span>
+      <button class="ctl" id="ksFull" title="Full screen">⛶</button>${ctlHTML()}<a href="#" id="logout" class="muted small">Sign out</a></header>
+    <div class="soundbar" id="soundbar" hidden>${ico('bell', 16)} Tap here to turn on sound alerts</div>
+    <main class="page" id="page"></main></div>`;
+  applyBranding(); paintCtl();
+  $('#logout').onclick = async e => { e.preventDefault(); stopLive(); await sb.auth.signOut({ scope: 'local' }); showLogin(); };
+  $('#ksFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+  const sbar = $('#soundbar');
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+    sbar.hidden = false;
+    sbar.onclick = () => { sbar.hidden = true; beep('done'); }; document.addEventListener('pointerdown', () => { sbar.hidden = true; }, { once: true });
+  }
+  try {                                                      // keep the monitor awake
+    if (navigator.wakeLock) { const lock = async () => { try { await navigator.wakeLock.request('screen'); } catch { /* ignore */ } }; lock(); document.addEventListener('visibilitychange', () => { if (!document.hidden) lock(); }); }
+  } catch { /* ignore */ }
+  window.removeEventListener('settings-changed', applyBranding); window.addEventListener('settings-changed', applyBranding);
+  startLive();
+  mountKitchen();
+}
 function applyBranding() {
   const s = state.settings;
   const bn = $('#brandName'); if (bn) bn.textContent = s.shop_name;
   const cn = $('#cashierName'); if (cn) cn.textContent = getCashier() || 'not set';
-  document.title = `${s.shop_name} POS`;
+  document.title = SCREEN === 'kitchen' ? `${s.shop_name} · Kitchen` : `${s.shop_name} POS`;
 }
 
 async function route() {
@@ -257,7 +287,8 @@ async function route() {
     root.innerHTML = `<div class="card"><h2>Something went wrong</h2><div class="err">${esc(errMsg(e))}</div><p class="muted">If this says a table does not exist, run <b>sql/schema.sql</b> in Supabase SQL Editor.</p></div>`;
   }
 }
-window.addEventListener('hashchange', () => { if (state.user) route(); });
+window.addEventListener('hashchange', () => { if (state.user && !SCREEN) route(); });
+const reroute = () => (SCREEN === 'kitchen' ? mountKitchen() : route());
 
 // =====================================================================
 //  Live: realtime + polling -> alerts, kitchen badge, auto-refresh on every device
@@ -281,7 +312,10 @@ function handleOrder(o) {
     beep('done'); buzz([200, 100, 200]);
   }
 }
-function setBadge(n) { const b = $('#kBadge'); if (!b) return; b.textContent = n; b.hidden = !n; }
+function setBadge(n) {
+  const b = $('#kBadge'); if (b) { b.textContent = n; b.hidden = !n; }
+  const k = $('#ksCount'); if (k) { k.textContent = n ? `${n} waiting` : 'All clear'; k.className = 'pill ks-count ' + (n ? 'warn' : 'ok'); }
+}
 
 async function poll() {
   if (!state.user) return;
@@ -311,7 +345,7 @@ function clockTick() {
   if (d !== lastDay) {                                       // midnight in Sri Lanka -> a new day starts
     lastDay = d;
     toast('New day started: screens refreshed', 'info', 6000);
-    refreshSettings(); route();
+    refreshSettings(); reroute();
   }
 }
 const onVisible = () => { if (!document.hidden && state.user) { poll(); window.dispatchEvent(new Event('data-changed')); clockTick(); } };

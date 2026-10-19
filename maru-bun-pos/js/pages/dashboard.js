@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal } from '../utils.js';
+import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal, netTotal } from '../utils.js';
 
 export async function render(root) {
   let range = 'month', lastSig = '', busy = false, dead = false;
@@ -20,24 +20,31 @@ export async function render(root) {
       if (ri.error) throw ri.error;
       const items = ri.data || [], inv = rinv.data || [];
       // skip repainting when nothing changed (auto-refresh every few seconds on every device)
-      const sig = [today, orders.length, orders.reduce((n, o) => n + Number(o.total || 0) + (o.status === 'pending' ? 1 : 0), 0),
+      const sig = [today, orders.length, orders.reduce((n, o) => n + netTotal(o) + (o.status === 'pending' ? 1 : 0), 0),
         items.map(i => i.id + i.stock + i.price).join(), inv.map(i => i.id + i.qty).join()].join('|');
       if (sig === lastSig) { busy = false; return; }
       lastSig = sig;
 
       const monthOrders = orders.filter(o => o.created_at >= mFrom);
       const todayOrders = orders.filter(o => dstr(o.created_at) === today);
-      const sum = a => a.reduce((n, o) => n + Number(o.total || 0), 0);
+      const sum = a => a.reduce((n, o) => n + netTotal(o), 0);
       const split = list => ['dine_in', 'takeaway'].map(t => { const l = list.filter(o => o.order_type === t); return { n: l.length, t: sum(l) }; });
       const [tDine, tTake] = split(todayOrders), [mDine, mTake] = split(monthOrders);
 
       const days = [...Array(7)].map((_, i) => { const d = now - (6 - i) * 864e5; return { k: dstr(d), l: weekday(d), t: 0 }; });
-      orders.forEach(o => { const d = days.find(x => x.k === dstr(o.created_at)); if (d) d.t += Number(o.total || 0); });
+      orders.forEach(o => { const d = days.find(x => x.k === dstr(o.created_at)); if (d) d.t += netTotal(o); });
       const maxDay = Math.max(1, ...days.map(d => d.t));
 
       const sold = list => {
         const m = {};
-        list.forEach(o => (o.items || []).forEach(l => { const k = l.item_id || l.name; (m[k] = m[k] || { name: l.name, qty: 0, rev: 0, id: l.item_id }); m[k].qty += l.qty; m[k].rev += lineTotal(l); }));
+        list.forEach(o => {
+          (o.items || []).forEach(l => { const k = l.item_id || l.name; (m[k] = m[k] || { name: l.name, qty: 0, rev: 0, id: l.item_id }); m[k].qty += l.qty; m[k].rev += lineTotal(l); });
+          (o.refunds || []).forEach(rf => (rf.items || []).forEach(it => {            // refunded items are not "sold"
+            if (!/^i\d+$/.test(it.key)) return;
+            const l = (o.items || [])[Number(it.key.slice(1))], k = l && (l.item_id || l.name);
+            if (k && m[k]) { m[k].qty -= it.qty; m[k].rev -= it.amount; }
+          }));
+        });
         return m;
       };
       const soldToday = sold(todayOrders), soldMonth = sold(monthOrders);

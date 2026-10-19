@@ -119,3 +119,9 @@ WhatsApp does not let any app send to many people from your normal WhatsApp. The
 7. Run `sql/update-6.sql` (photo storage) if you have not.
 
 **Using it**: Customers → Send promotion → *Send to everyone automatically* (it turns on by itself once the function and secrets exist) → template name + language, add the photo, choose who → Start. Failed numbers are listed with the reason and can be retried. Meta charges per marketing message and only people who have WhatsApp will receive it; send only to customers who agreed.
+
+## Update 9 – bill stays open after refresh, refunds, change type/payment, kitchen screen page
+1. **Run `sql/update-7.sql`** once in Supabase → SQL Editor (adds refund + change-history columns to bills).
+2. **Bill window after Place Order stays open** – even if the page is refreshed or you open another tab – until you press ✕. You can still Print / WhatsApp it. (Bills opened from Orders & Billing can also be sent any time.)
+3. **Orders & Billing → open a bill**: **Change type / payment** (Dine-in ⇄ Takeaway, table no., payment method) and **↩ Refund** (pick which items / extras and how many; optional reason; optional "put back in stock"). Refunds on a non-admin device ask for the admin email + password. The bill shows *Refunded* and *NET TOTAL*; Orders, Dashboard and sales totals use the net amount. Every change is recorded (who and when).
+4. **Kitchen screen page**: open `https://YOUR-SITE/kitchen.html` (or Kitchen Display → *Open as kitchen screen*) on the kitchen monitor. It has no menu, big cards, new-order alert sound, full-screen button and keeps the screen awake. Sign in once on that device (it is named "Kitchen screen" and needs the admin's approval like any device).

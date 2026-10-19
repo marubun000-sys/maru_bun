@@ -1,10 +1,13 @@
 import { esc, fmt, money, billNo, dtstr, normPhone, modal, ico, toast, $, lineRows } from './utils.js';
 import { state } from './state.js';
+import { sb } from './sb.js';
 import { SOFTWARE_NAME, SOFTWARE_SITE } from './brand.js';
 
 const TYPE = { dine_in: 'Dine-in', takeaway: 'Takeaway' };
 const PAY = { cash: 'Cash', card: 'Card', bank: 'Bank Transfer', qr: 'QR Pay' };
 export const typeLabel = t => TYPE[t] || t;
+const refunded = o => Number(o.refund_total || 0);
+const netTotal = o => Math.round((Number(o.total || 0) - refunded(o)) * 100) / 100;
 export const payLabel = p => PAY[p] || p;
 const LOGO_PRINT = 'assets/logo-print.png';   // black & white, prints well on thermal paper
 const LOGO_COLOR = 'assets/logo-small.jpg';
@@ -46,6 +49,7 @@ export function billHTML(o, s = state.settings) {
     ${o.service_charge > 0 ? row(`Service charge${o.service_pct ? ' (' + o.service_pct + '%)' : ''}`, fmt(o.service_charge)) : ''}
     <div class="r-hr bold"></div>
     ${row('TOTAL (LKR)', fmt(o.total), 'r-total')}
+    ${refunded(o) > 0 ? row('Refunded', '- ' + fmt(refunded(o))) + row('NET TOTAL (LKR)', fmt(netTotal(o)), 'r-total') : ''}
     <div class="r-hr"></div>
     ${row('Paid by', payLabel(o.payment_method))}
     ${o.payment_method === 'cash' && o.cash_received > 0 ? row('Cash received', fmt(o.cash_received)) + row('Change', fmt(o.change_given)) : ''}
@@ -99,6 +103,7 @@ export function billText(o, s = state.settings) {
   if (o.discount > 0) L.push(`Discount${o.discount_label ? ' (' + o.discount_label + ')' : ''}: -${fmt(o.discount)}`);
   if (o.service_charge > 0) L.push(`Service charge${o.service_pct ? ' (' + o.service_pct + '%)' : ''}: ${fmt(o.service_charge)}`);
   L.push(`*TOTAL: LKR ${fmt(o.total)}*`);
+  if (refunded(o) > 0) { L.push(`Refunded: -${fmt(refunded(o))}`); L.push(`*NET TOTAL: LKR ${fmt(netTotal(o))}*`); }
   L.push(`Paid by: ${payLabel(o.payment_method)}`);
   if (o.payment_method === 'cash' && o.cash_received > 0) L.push(`Cash: ${fmt(o.cash_received)} · Change: ${fmt(o.change_given)}`);
   L.push('');
@@ -152,6 +157,7 @@ export async function billImage(o, s = state.settings, { review = true } = {}) {
   if (o.service_charge > 0) pair('Service charge' + (o.service_pct ? ` (${o.service_pct}%)` : ''), fmt(o.service_charge));
   add('hr', { bold: true });
   pair('TOTAL (LKR)', fmt(o.total), true, true);
+  if (refunded(o) > 0) { pair('Refunded', '- ' + fmt(refunded(o))); pair('NET TOTAL (LKR)', fmt(netTotal(o)), true, true); }
   add('hr');
   pair('Paid by', payLabel(o.payment_method));
   if (o.payment_method === 'cash' && o.cash_received > 0) { pair('Cash received', fmt(o.cash_received)); pair('Change', fmt(o.change_given)); }
@@ -205,7 +211,9 @@ export async function printHTML(...htmls) {
 }
 
 // ---------- bill popup (used after placing an order and from Orders & Billing) ----------
-export function showBillModal(o, { title, onClose } = {}) {
+const OPEN_BILL = 'mb_open_bill';
+export function showBillModal(o, { title, onClose, keep = false, manage } = {}) {
+  if (keep) { try { localStorage.setItem(OPEN_BILL, JSON.stringify({ id: o.id, title: title || '', t: Date.now() })); } catch { /* ignore */ } }
   const m = modal(`
     <h3>${esc(title || 'Bill ' + billNo(o.bill_no))}</h3>
     <div class="bill-preview">${billHTML(o)}</div>
@@ -218,14 +226,30 @@ export function showBillModal(o, { title, onClose } = {}) {
       <button class="btn wa" id="bWa">${ico('whatsapp')} WhatsApp (text)</button>
       <button class="btn ghost" id="bKot">${ico('print')} Kitchen Slip</button>
     </div>
+    ${manage ? `<div class="row wrap" style="margin-top:8px"><button class="btn ghost" id="bEdit">${ico('edit')} Change type / payment</button><button class="btn ghost" id="bRefund">↩ Refund</button></div>` : ''}
     <p class="muted small">WhatsApp bills include your Google review link${SOFTWARE_NAME || SOFTWARE_SITE ? ' and the software company line' : ''}. The printed bill does not show the review link. The <b>picture</b> version carries the logo (on a phone choose WhatsApp in the share list; on a computer the picture is saved and the chat opens).</p>`,
-    { onClose, wide: true });
+    { onClose: () => { if (keep) { try { localStorage.removeItem(OPEN_BILL); } catch { /* ignore */ } } if (onClose) onClose(); }, wide: true, outside: !keep });
   const phone = () => $('#waNum', m.el).value;
   $('#bWa', m.el).onclick = () => { if (!phone().trim()) toast('No number entered - choose the contact inside WhatsApp', 'info'); sendWhatsApp(o, phone()); };
   $('#bWaImg', m.el).onclick = () => sendBillImage(o, phone());
   $('#bPrint', m.el).onclick = () => printHTML(billHTML(o));
   $('#bKot', m.el).onclick = () => printHTML(kotHTML(o));
+  if (manage) {
+    $('#bEdit', m.el).onclick = () => { m.close(); manage.edit(o); };
+    $('#bRefund', m.el).onclick = () => { m.close(); manage.refund(o); };
+  }
   return m;
+}
+
+// after a refresh: bring back the bill that was still open (so it can still be printed / sent)
+export async function reopenBill() {
+  let k = null;
+  try { k = JSON.parse(localStorage.getItem(OPEN_BILL) || 'null'); } catch { /* ignore */ }
+  if (!k || !k.id) return;
+  if (Date.now() - (k.t || 0) > 12 * 3600e3) { try { localStorage.removeItem(OPEN_BILL); } catch { /* ignore */ } return; }
+  const { data } = await sb.from('orders').select('*').eq('id', k.id).maybeSingle();
+  if (!data) { try { localStorage.removeItem(OPEN_BILL); } catch { /* ignore */ } return; }
+  showBillModal(data, { title: k.title || undefined, keep: true });
 }
 
 export { money };

@@ -32,7 +32,7 @@ function load() {
 const save = d => localStorage.setItem(KEY, JSON.stringify(d));
 
 const DEFAULTS = {
-  orders: d => ({ token_no: (() => { const day = x => new Date(new Date(x).getTime() + 19800000).toISOString().slice(0, 10), t = day(Date.now()); return d.orders.filter(o => day(o.created_at) === t).reduce((n, o) => Math.max(n, o.token_no || 0), 0) + 1; })(), bill_no: ++d._seq, order_type: 'dine_in', table_no: '', customer_name: '', customer_phone: '', note: '', items: [], subtotal: 0, discount: 0, discount_label: '', service_pct: 0, service_charge: 0, total: 0, payment_method: 'cash', cash_received: 0, change_given: 0, cashier: '', status: 'pending', served_at: null }),
+  orders: d => ({ token_no: (() => { const day = x => new Date(new Date(x).getTime() + 19800000).toISOString().slice(0, 10), t = day(Date.now()); return d.orders.filter(o => day(o.created_at) === t).reduce((n, o) => Math.max(n, o.token_no || 0), 0) + 1; })(), bill_no: ++d._seq, order_type: 'dine_in', table_no: '', customer_name: '', customer_phone: '', note: '', items: [], subtotal: 0, discount: 0, discount_label: '', service_pct: 0, service_charge: 0, total: 0, payment_method: 'cash', cash_received: 0, change_given: 0, cashier: '', status: 'pending', served_at: null, refund_total: 0, refunds: [], edits: [] }),
   items: () => ({ price: 0, allow_addons: true, track_stock: true, stock: 0, low_stock: 5, active: true, category_id: null }),
   categories: () => ({ sort: 0 }),
   addons: () => ({ price: 0, active: true }),
