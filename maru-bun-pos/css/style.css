@@ -265,3 +265,4 @@ button.pill{cursor:pointer;font-family:inherit}
 .opt small{display:block;color:var(--muted);font-size:12px;margin-top:2px;line-height:1.5}
 .opt small input[type=number]{width:68px;display:inline-block;padding:3px 8px;margin:0 3px;vertical-align:middle}
 .opt.off{opacity:.65;cursor:not-allowed}
+.opt small b{display:inline;font-size:inherit;color:var(--text)}

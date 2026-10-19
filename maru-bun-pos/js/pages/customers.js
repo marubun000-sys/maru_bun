@@ -104,9 +104,11 @@ export async function render(root) {
     // is the automatic sender set up?
     (async () => {
       const note = $('#autoNote', m.el), radio = m.el.querySelector('input[value=auto]');
-      try { const r = await callApi({ ping: true }); apiReady = !!(r && r.configured); } catch { apiReady = false; }
+      let why = '';
+      try { const r = await callApi({ ping: true }); apiReady = !!(r && r.configured); if (!apiReady) why = 'The <b>send-promo</b> function is deployed, but the secrets <b>WA_TOKEN</b> and <b>WA_PHONE_ID</b> are missing (Supabase → Edge Functions → Secrets).'; }
+      catch (e) { apiReady = false; why = /not found|404|relay|failed to send|fetch/i.test(e.message) ? 'The <b>send-promo</b> function is not deployed in Supabase yet (Edge Functions → Deploy new function).' : esc(e.message); }
       if (apiReady) { note.textContent = 'Uses your WhatsApp Business account · all customers in one go · photo included'; radio.checked = true; paint(); }
-      else { note.innerHTML = 'Not set up yet. See README → <b>WhatsApp automatic sending</b> (needs a Meta WhatsApp Business account).'; radio.disabled = true; $('#optAuto', m.el).classList.add('off'); }
+      else { note.innerHTML = `Not available yet. ${why} Steps: README → WhatsApp automatic sending. Until then use <i>Send one by one</i>.`; radio.disabled = true; $('#optAuto', m.el).classList.add('off'); }
     })();
 
     $('#pCancel', m.el).onclick = () => m.close();
