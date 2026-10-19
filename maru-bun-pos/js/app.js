@@ -168,7 +168,7 @@ async function deviceWatch() {
 // ADMIN device only: pop up when another device asks to open Settings & Security (or a new device is waiting)
 const asked = new Set();
 async function checkRequests() {
-  if (!state.user || !amAdmin()) return;
+  if (!state.user || SCREEN || !amAdmin()) return;     // pop-ups only on the admin POS page - never on the kitchen screen page
   const { data, error } = await sb.from('devices').select('*').neq('id', deviceId());
   if (error || !data) return;
   for (const d of data) {

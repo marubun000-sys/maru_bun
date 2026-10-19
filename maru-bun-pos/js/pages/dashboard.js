@@ -49,6 +49,25 @@ export async function render(root) {
       };
       const soldToday = sold(todayOrders), soldMonth = sold(monthOrders);
 
+      // refunded items (by the day the refund was made)
+      const refunded = since => {
+        const m = {}; let total = 0, n = 0;
+        orders.forEach(o => (o.refunds || []).forEach(rf => {
+          if (!since(rf.at)) return;
+          n++; total += Number(rf.amount) || 0;
+          (rf.items || []).forEach(it => { const r = (m[it.name] = m[it.name] || { name: it.name, qty: 0, amt: 0, back: false }); r.qty += Number(it.qty) || 0; r.amt += Number(it.amount) || 0; if (rf.restock) r.back = true; });
+        }));
+        return { rows: Object.values(m).sort((a, b) => b.qty - a.qty), total, n };
+      };
+      const refToday = refunded(at => dstr(at) === today), refMonth = refunded(at => at >= mFrom);
+      const refTable = () => {
+        const r = range === 'today' ? refToday : refMonth;
+        return r.n ? `<div class="row wrap" style="margin-bottom:8px"><span class="pill bad">${r.n} refund${r.n > 1 ? 's' : ''}</span><span class="pill bad">${money(r.total)} refunded</span></div>
+          <div class="tbl-wrap"><table><thead><tr><th>Item</th><th class="r">Qty refunded</th><th class="r">Amount</th><th>Stock</th></tr></thead><tbody>
+          ${r.rows.map(x => `<tr><td><b>${esc(x.name)}</b></td><td class="r">${x.qty}</td><td class="r">${fmt(x.amt)}</td><td>${x.back ? '<span class="pill ok">Added back</span>' : '<span class="muted small">not added</span>'}</td></tr>`).join('')}
+          </tbody></table></div>` : '<div class="empty">No refunds 👍</div>';
+      };
+
       const topTable = () => {
         const src = range === 'today' ? soldToday : soldMonth;
         const rows = Object.values(src).sort((a, b) => b.qty - a.qty).slice(0, 10);
@@ -89,6 +108,8 @@ export async function render(root) {
           <div id="top">${topTable()}</div>
         </div>
 
+        <div class="card" style="margin-bottom:14px"><h2>Refunded items</h2><div id="refs">${refTable()}</div></div>
+
         <div class="cols">
           <div class="card"><h2>Item stock</h2>
             ${stockRows.length ? `<div class="tbl-wrap" style="max-height:340px"><table><thead><tr><th>Item</th><th class="r">In stock</th><th>Status</th></tr></thead><tbody>
@@ -105,7 +126,7 @@ export async function render(root) {
 
       $('#rng', root).onclick = e => {
         const b = e.target.closest('[data-r]'); if (!b) return;
-        range = b.dataset.r; $$('#rng button', root).forEach(x => x.classList.toggle('on', x === b)); $('#top').innerHTML = topTable();
+        range = b.dataset.r; $$('#rng button', root).forEach(x => x.classList.toggle('on', x === b)); $('#top').innerHTML = topTable(); $('#refs').innerHTML = refTable();
       };
     } finally { busy = false; }
   }

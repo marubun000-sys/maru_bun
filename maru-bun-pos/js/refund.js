@@ -90,7 +90,7 @@ export function openRefund(o, done) {
     </tbody></table></div>
     <div class="row wrap" style="margin:8px 0"><button type="button" class="btn ghost sm" id="rAll">Refund everything left</button><button type="button" class="btn ghost sm" id="rNone">Clear</button></div>
     <label>Reason (optional)<input id="rWhy" placeholder="e.g. customer returned, wrong item"></label>
-    <label class="check"><input type="checkbox" id="rStock"> Put the refunded items back in stock</label>
+    <label class="check"><input type="checkbox" id="rStock" checked> Put the refunded items back in stock</label>
     <div class="totals"><div class="grand"><span>Refund</span><span id="rTot">LKR 0.00</span></div></div>
     <div class="row end"><button type="button" class="btn ghost" data-c>Cancel</button><button class="btn danger" id="rGo" disabled>Refund</button></div>`, { wide: true });
   const el = s => m.el.querySelector(s);

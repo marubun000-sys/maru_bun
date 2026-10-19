@@ -125,3 +125,8 @@ WhatsApp does not let any app send to many people from your normal WhatsApp. The
 2. **Bill window after Place Order stays open** – even if the page is refreshed or you open another tab – until you press ✕. You can still Print / WhatsApp it. (Bills opened from Orders & Billing can also be sent any time.)
 3. **Orders & Billing → open a bill**: **Change type / payment** (Dine-in ⇄ Takeaway, table no., payment method) and **↩ Refund** (pick which items / extras and how many; optional reason; optional "put back in stock"). Refunds on a non-admin device ask for the admin email + password. The bill shows *Refunded* and *NET TOTAL*; Orders, Dashboard and sales totals use the net amount. Every change is recorded (who and when).
 4. **Kitchen screen page**: open `https://YOUR-SITE/kitchen.html` (or Kitchen Display → *Open as kitchen screen*) on the kitchen monitor. It has no menu, big cards, new-order alert sound, full-screen button and keeps the screen awake. Sign in once on that device (it is named "Kitchen screen" and needs the admin's approval like any device).
+
+## Update 10
+- Settings access requests ("Allow / Deny") and "new device waiting" alerts appear **only on the admin POS page** – never on the kitchen screen page (`kitchen.html`), even if it is open in the same browser.
+- **Dashboard → Refunded items**: every refunded item with quantity and amount (Today / This month switch), and whether it was added back to stock.
+- Refunded items are **put back in stock by default** (the tick can be removed in the refund window).
