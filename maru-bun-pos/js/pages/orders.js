@@ -46,10 +46,11 @@ export async function render(root) {
   function draw() {
     const todayList = cur.filter(o => dstr(o.created_at) === dstr(new Date()));
     const list = filtered();
+    const scope = [mode === 'today' ? 'Today' : mode === 'month' ? ym : day, ftype ? typeLabel(ftype) : '', fpay ? payLabel(fpay) : '', search ? `"${search}"` : ''].filter(Boolean).join(' · ');
     $('#cards').innerHTML = `
       <div class="stat gold"><div class="k">Today's sale</div><div class="v">${money(sum(todayList))}</div><div class="s">${todayList.length} bills</div></div>
       <div class="stat gold"><div class="k">This month's sale</div><div class="v">${money(sum(cur))}</div><div class="s">${cur.length} bills</div></div>
-      <div class="stat"><div class="k">Showing</div><div class="v">${money(sum(list))}</div><div class="s">${list.length} bills${list.length ? ' · avg ' + fmt(sum(list) / list.length) : ''}</div></div>
+      <div class="stat"><div class="k">Bills in the list below</div><div class="v">${money(sum(list))}</div><div class="s">${list.length} bills${list.length ? ' · average per bill ' + fmt(sum(list) / list.length) : ''}</div><div class="s" data-noi18n>${esc(scope)}</div></div>
       <div class="stat"><div class="k">Dine-in / Takeaway</div><div class="v">${list.filter(o => o.order_type === 'dine_in').length} / ${list.filter(o => o.order_type === 'takeaway').length}</div><div class="s">in this view</div></div>`;
 
     // daily breakdown for month view

@@ -87,7 +87,7 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Back to today': 'අදට ආපසු', 'Days with refunds': 'ආපසු දීම් තිබූ දවස්', 'No refunds today 👍': 'අද ආපසු දීම් නැත 👍', 'No refunds on this day': 'මේ දවසේ ආපසු දීම් නැත', '✔ Added back': '✔ තොගයට එකතු කළා', '✖ Not added back': '✖ තොගයට එකතු කළේ නැත', 'No refunds 👍': 'ආපසු දීම් නැත 👍',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Bills in the list below': 'පහළ ලැයිස්තුවේ බිල්පත්', 'Back to today': 'අදට ආපසු', 'Days with refunds': 'ආපසු දීම් තිබූ දවස්', 'No refunds today 👍': 'අද ආපසු දීම් නැත 👍', 'No refunds on this day': 'මේ දවසේ ආපසු දීම් නැත', '✔ Added back': '✔ තොගයට එකතු කළා', '✖ Not added back': '✖ තොගයට එකතු කළේ නැත', 'No refunds 👍': 'ආපසු දීම් නැත 👍',
   'Refund': 'මුදල් ආපසු', 'Change type / payment': 'වර්ගය / ගෙවීම වෙනස් කරන්න', '↗ Open as kitchen screen': '↗ කුස්සි තිරයක් ලෙස විවෘත කරන්න', 'Refund everything left': 'ඉතිරි සියල්ල ආපසු දෙන්න',
   'Reason (optional)': 'හේතුව (අවශ්‍ය නම්)', 'Put the refunded items back in stock': 'ආපසු දුන් අයිතම තොගයට එකතු කරන්න', 'Admin approval needed': 'පරිපාලක අනුමැතිය අවශ්‍යයි',
   'Recently served': 'මෑතදී සේවය කළ', 'Edited': 'වෙනස් කළා', 'Part refund': 'කොටසක් ආපසු', 'Refunded': 'ආපසු දුන්',
@@ -123,6 +123,7 @@ const PATTERNS = [
   [/^Extras \/ Add-ons \((\d+)\)$/, 'Extras / Add-ons ($1)'],
   [/^(\d+) bills$/, 'බිල්පත් $1'],
   [/^(\d+) bills · avg (.*)$/, 'බිල්පත් $1 · සාමාන්‍ය $2'],
+  [/^(\d+) bills · average per bill (.*)$/, 'බිල්පත් $1 · බිල්පතක සාමාන්‍යය $2'],
   [/^(\d+) orders$/, 'ඇණවුම් $1'],
   [/^(\d+) min$/, 'මිනිත්තු $1'],
   [/^(\d+) running low$/, '$1 ක් අඩුයි'],
