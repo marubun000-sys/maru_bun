@@ -138,4 +138,12 @@ Run **sql/update-8.sql** in the Supabase SQL Editor (safe to run again).
 - **Menu → Items → Edit**: add the ingredients of ONE item (e.g. 1 bun + 10 g cheese). The cost and profit are worked out from the inventory prices, or tick "I will type the cost myself". Extras have their own cost.
 - **POS**: every bill remembers the cost at the time of sale (profit of old bills never changes).
 - **Orders & Billing**: "Profit from these bills" card (for the bills in the list below) + profit under every bill; CSV has Cost and Profit columns. Bills made before this update have no cost and are not counted.
-- Note: selling an item does not reduce the ingredient stock automatically (recipes are used for costing).
+
+
+## Update 12 – ingredient use, dashboard profit, forgot password, security alerts
+Run **sql/update-9.sql** in the Supabase SQL Editor (safe to run again).
+- **Ingredients come out of the inventory when you sell**: each item's recipe (e.g. 1 pcs bun + 10 g cheese) is converted into the inventory unit (g -> kg, ml -> L) and subtracted. A refund with "put back in stock" ticked puts the ingredients back too. Extras are not part of this (they only have a cost).
+- **Dashboard**: "Today's profit" and "This month's profit" cards.
+- **Forgot password** (login page): 1) enter the account email -> a reset link is emailed, 2) open the link on the device, enter the 6-digit code from the authenticator app, 3) choose a new password.
+  In Supabase: Authentication -> URL Configuration -> add your site address (https://cerulean-haupia-244018.netlify.app) to **Redirect URLs**.
+- **Settings & Security**: changing the password or turning 2-step OFF always asks for the authenticator code. When this is done from a device that is not the admin device, the admin device gets a "Security alert" pop-up.

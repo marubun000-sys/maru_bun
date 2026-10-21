@@ -36,6 +36,7 @@ const DEFAULTS = {
   items: () => ({ cost: 0, cost_manual: false, recipe: [], price: 0, allow_addons: true, track_stock: true, stock: 0, low_stock: 5, active: true, category_id: null }),
   categories: () => ({ sort: 0 }),
   addons: () => ({ price: 0, cost: 0, active: true }),
+  security_alerts: () => ({ seen: false }),
   inventory: () => ({ unit: 'pcs', qty: 0, low_level: 0, cost_per_unit: 0 }),
 };
 
@@ -121,6 +122,12 @@ export function createDemo() {
         save(d); emit({ eventType: 'UPDATE', table: 'inventory', new: { ...r }, old: {} });
         return { data: { ...r }, error: null };
       }
+      if (name === 'adjust_inventory_bulk') {
+        const d = load();
+        (a.p_changes || []).forEach(c => { const r = d.inventory.find(x => x.id === c.id); if (r) r.qty = Math.round((+r.qty + +c.delta) * 10000) / 10000; });
+        save(d); emit({ eventType: 'UPDATE', table: 'inventory', new: {}, old: {} });
+        return { data: null, error: null };
+      }
       if (name === 'register_device') {
         const d = load(); d.devices = d.devices || []; const now = iso();
         let r = d.devices.find(x => x.id === a.p_id);
@@ -162,6 +169,7 @@ export function createDemo() {
       },
       async signOut(_o) { localStorage.removeItem(AUTH); sessionStorage.removeItem('mb_aal'); return { error: null }; },
       async updateUser() { return { data: {}, error: null }; },
+      async resetPasswordForEmail() { return { data: {}, error: null }; },
       mfa: {
         async getAuthenticatorAssuranceLevel() { const d = load(); const f = d._mfa; return { data: { currentLevel: aal(), nextLevel: f && f.verified ? 'aal2' : 'aal1' }, error: null }; },
         async listFactors() { const f = load()._mfa; return { data: { all: f ? [f] : [], totp: f && f.verified ? [f] : [] }, error: null }; },

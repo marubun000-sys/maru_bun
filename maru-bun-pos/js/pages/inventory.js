@@ -98,7 +98,7 @@ export async function render(root) {
     if (b.dataset.a === 'adj') {
       const v = await promptModal({ title: `Use / waste · ${r.name}`, label: `Remove (−) used or wasted stock, in ${r.unit}. (To add bought stock use "Add stock".) Current: ${num(r.qty)}`, type: 'number', step: 'any', ok: 'Update', placeholder: 'e.g. 20 or -3' });
       if (v === null || !num(v)) return;
-      const { error } = await sb.from('inventory').update({ qty: Math.round((num(r.qty) + num(v)) * 100) / 100 }).eq('id', r.id); if (error) throw error; toast('Inventory updated');
+      const { error } = await sb.from('inventory').update({ qty: Math.round((num(r.qty) + num(v)) * 10000) / 10000 }).eq('id', r.id); if (error) throw error; toast('Inventory updated');
     }
     if (b.dataset.a === 'del' && await confirmBox(`Delete "${r.name}"?`)) {
       const { error } = await sb.from('inventory').delete().eq('id', r.id); if (error) throw error; toast('Deleted');

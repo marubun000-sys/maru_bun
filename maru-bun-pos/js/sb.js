@@ -1,6 +1,8 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { createDemo } from './demo.js';
 
+// opened from a "reset password" email? (must be read before supabase-js clears the link from the address bar)
+export const RECOVERY_LINK = /type=recovery/.test(location.hash);
 export const DEMO = !SUPABASE_URL || !SUPABASE_ANON_KEY;
 
 async function waitForLib() {

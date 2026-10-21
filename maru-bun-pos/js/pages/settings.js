@@ -2,6 +2,7 @@ import { sb, DEMO } from '../sb.js';
 import { state, saveSettings, getCashier, setCashier } from '../state.js';
 import { $, esc, num, toast, ico, confirmBox, errMsg, promptModal, onLive, dtstr } from '../utils.js';
 import { isAdminDevice, amAdmin, verifyAdmin, listDevices, approveDevice, removeDevice, renameDevice, deviceId, setDeviceName, fetchMe, requestSettings, clearSettingsRequest, fresh } from '../device.js';
+import { askAuthCode, alertAdmin } from '../security.js';
 
 const METHODS = [['cash', 'Cash'], ['card', 'Card'], ['bank', 'Bank Transfer'], ['qr', 'QR Pay']];
 
@@ -121,9 +122,11 @@ async function renderInner(root) {
     const a = $('#np', root).value, b = $('#np2', root).value;
     if (a.length < 8) return toast('Password must be at least 8 characters', 'err');
     if (a !== b) return toast('Passwords do not match', 'err');
+    if (!await askAuthCode('Change password – enter your authenticator code')) return toast('The authenticator code is needed to change the password', 'err');
     const { error } = await sb.auth.updateUser({ password: a });
     if (error) return toast(errMsg(error), 'err', 6000);
     $('#np', root).value = ''; $('#np2', root).value = ''; toast('Password changed');
+    alertAdmin('password');
   };
 
   // ---------- 2-step verification (TOTP authenticator app) ----------
@@ -137,9 +140,11 @@ async function renderInner(root) {
         <p class="muted small">Every login asks for a 6-digit code from your authenticator app (Google Authenticator, Microsoft Authenticator, Authy…).</p>`;
       $('#mfaOff', box).onclick = async () => {
         if (!await confirmBox('Turn off 2-step verification? Your account will be less secure.', 'Turn off')) return;
+        if (!await askAuthCode('Turn off 2-step – enter your authenticator code')) return toast('The authenticator code is needed to turn off 2-step verification', 'err');
         const { error: e } = await sb.auth.mfa.unenroll({ factorId: verified.id });
         if (e) return toast(errMsg(e), 'err', 6000);
         toast('2-step verification turned off'); drawMfa();
+        alertAdmin('mfa_off');
       };
     } else {
       box.innerHTML = `<div class="row wrap"><span class="pill warn">2-step verification is OFF</span><div class="spacer"></div><button class="btn sm" id="mfaOn">Turn on</button></div>

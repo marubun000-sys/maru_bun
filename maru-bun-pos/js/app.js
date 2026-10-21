@@ -1,8 +1,9 @@
-import { sb, DEMO } from './sb.js';
+import { sb, DEMO, RECOVERY_LINK } from './sb.js';
 import { state, loadSettings, saveSettings, getCashier, setCashier } from './state.js';
 import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen, modal } from './utils.js';
 import { initI18n, setLang, getLang } from './i18n.js';
 import { reopenBill } from './bill.js';
+import { askAuthCode } from './security.js';
 import { getDeviceName, setDeviceName, guessName, registerDevice, fetchMe, amAdmin, deviceId, answerSettings, fresh } from './device.js';
 import * as pos from './pages/pos.js';
 import * as orders from './pages/orders.js';
@@ -71,7 +72,9 @@ function showLogin() {
       <label>Email<input type="email" id="em" autocomplete="username" required></label>
       <label>Password<input type="password" id="pw" autocomplete="current-password" required></label>
       <button class="btn big" id="lb">Sign in</button>
-    </form>`);
+    </form>
+    <p style="text-align:center;margin-top:12px"><a href="#" id="fp" class="muted">Forgot password?</a></p>`);
+  $('#fp').onclick = e => { e.preventDefault(); showForgot(); };
   $('#lf').onsubmit = async e => {
     e.preventDefault();
     const btn = $('#lb'); btn.disabled = true;
@@ -79,6 +82,60 @@ function showLogin() {
     btn.disabled = false;
     if (error) { $('#err').innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     boot();
+  };
+}
+
+// ---- forgot password: 1) link sent to the account email  2) authenticator code  3) new password ----
+function showForgot(msg = '') {
+  loginShell(`<div id="err">${msg ? `<div class="err">${esc(msg)}</div>` : ''}</div>
+    <p class="muted" style="text-align:center">Forgot password<br><small>Enter the account email. We send a reset link to it. After opening the link you type the code from your authenticator app, then choose a new password.</small></p>
+    <form id="ff"><label>Email<input type="email" id="fe" autocomplete="username" required></label><button class="btn big">Send reset link</button></form>
+    <p style="text-align:center"><a href="#" id="bk" class="muted">Back to sign in</a></p>`);
+  $('#bk').onclick = e => { e.preventDefault(); showLogin(); };
+  $('#ff').onsubmit = async e => {
+    e.preventDefault();
+    const email = $('#fe').value.trim();
+    if (DEMO) { localStorage.setItem('mb_demo_auth', JSON.stringify({ email })); sessionStorage.setItem('mb_aal', 'aal1'); return showRecovery(); }   // demo has no email: go straight on
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error) { $('#err').innerHTML = `<div class="err">${esc(errMsg(error))}</div>`; return; }
+    loginShell(`<div class="pill ok" style="display:block;text-align:center;margin:10px 0">Check your email</div>
+      <p class="muted" style="text-align:center">If <b>${esc(email)}</b> is the account email, a reset link is on its way.<br>Open the link on this device, then enter your authenticator code and choose a new password.</p>
+      <button class="btn big" id="bk">Back to sign in</button>`);
+    $('#bk').onclick = () => showLogin();
+  };
+}
+async function showRecovery() {
+  const { data } = await sb.auth.getSession();
+  if (!data || !data.session) return showForgot('That reset link is not valid any more. Please ask for a new one.');
+  const { data: f } = await sb.auth.mfa.listFactors();
+  const factor = (f && f.totp && f.totp[0]) || null;
+  const leave = async () => { try { await sb.auth.signOut({ scope: 'local' }); } catch { /* ignore */ } history.replaceState(null, '', location.pathname); showLogin(); };
+  const newPassword = () => {
+    loginShell(`<div id="err"></div><p class="muted" style="text-align:center">Choose a new password</p>
+      <form id="pf"><label>New password<input type="password" id="n1" minlength="8" autocomplete="new-password" required></label>
+      <label>Repeat<input type="password" id="n2" autocomplete="new-password" required></label><button class="btn big">Save new password</button></form>
+      <p style="text-align:center"><a href="#" id="so" class="muted">Cancel</a></p>`);
+    $('#so').onclick = e => { e.preventDefault(); leave(); };
+    $('#pf').onsubmit = async e => {
+      e.preventDefault();
+      if ($('#n1').value !== $('#n2').value) { $('#err').innerHTML = '<div class="err">Passwords do not match</div>'; return; }
+      const { error } = await sb.auth.updateUser({ password: $('#n1').value });
+      if (error) { $('#err').innerHTML = `<div class="err">${esc(errMsg(error))}</div>`; return; }
+      try { await sb.auth.signOut({ scope: 'local' }); } catch { /* ignore */ }
+      history.replaceState(null, '', location.pathname);
+      showLogin(); $('#err').innerHTML = '<div class="pill ok" style="display:block;text-align:center;margin:8px 0">Password changed – sign in with the new password</div>';
+    };
+  };
+  if (!factor) return newPassword();               // 2-step is not on: the email link is the proof
+  loginShell(`<div id="err"></div><p class="muted" style="text-align:center">Reset password<br>Enter the 6-digit code from your authenticator app</p>
+    <form id="mf"><label>Code<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required style="text-align:center;font-size:22px;letter-spacing:6px"></label>
+    <button class="btn big">Verify</button></form><p style="text-align:center"><a href="#" id="so" class="muted">Cancel</a></p>`);
+  $('#code').focus(); $('#so').onclick = e => { e.preventDefault(); leave(); };
+  $('#mf').onsubmit = async e => {
+    e.preventDefault();
+    const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: factor.id, code: $('#code').value.trim() });
+    if (error) { $('#err').innerHTML = `<div class="err">${esc(errMsg(error))}</div>`; $('#code').select(); return; }
+    newPassword();
   };
 }
 
@@ -105,6 +162,7 @@ async function showMfa() {
 //  Boot
 // =====================================================================
 async function boot() {
+  if (RECOVERY_LINK && !boot.recoveryShown) { boot.recoveryShown = true; return showRecovery(); }   // opened from the reset-password email
   const { data } = await sb.auth.getSession();
   const session = data && data.session;
   if (!session) { try { await loadSettings(); } catch { /* not allowed before login */ } return showLogin(); }
@@ -188,6 +246,19 @@ async function checkRequests() {
       asked.add('p' + d.id); beep('done');
       toast(`New device "${d.name || 'device'}" is waiting for approval – open Settings & Security → Devices`, 'info', 12000);
     }
+  }
+  // another device changed the password / turned 2-step off
+  const { data: al, error: ae } = await sb.from('security_alerts').select('*').eq('seen', false).order('created_at', { ascending: true });
+  if (ae || !al) return;
+  for (const a of al) {
+    if (asked.has('a' + a.id)) continue; asked.add('a' + a.id); beep('new');
+    const what = a.kind === 'password' ? 'changed the <b>password</b>' : 'turned <b>OFF 2-step verification</b>';
+    const who = esc(a.device_name || 'A device') + (a.cashier ? ` <span class="muted">(${esc(a.cashier)})</span>` : '');
+    const mark = async () => { try { await sb.from('security_alerts').update({ seen: true }).eq('id', a.id); } catch { /* ignore */ } };
+    const m = modal(`<h3 style="color:var(--bad)">🔔 Security alert</h3><p><b>${who}</b> ${what}.</p>
+      <p class="muted small">${esc(new Date(a.created_at).toLocaleString('en-GB', { timeZone: 'Asia/Colombo' }))} · If this was not expected, change the password now in Settings &amp; Security and remove the device.</p>
+      <div class="row end"><button class="btn" data-ok>OK, I know</button></div>`, { onClose: mark });
+    $('[data-ok]', m.el).onclick = () => m.close();
   }
 }
 window.addEventListener('data-changed', () => { clearTimeout(checkRequests.t); checkRequests.t = setTimeout(checkRequests, 300); });

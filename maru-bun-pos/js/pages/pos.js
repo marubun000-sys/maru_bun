@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
 import { state, getCashier, setCashier } from '../state.js';
-import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone, promptModal, itemCost, invMapOf } from '../utils.js';
+import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone, promptModal, itemCost, invMapOf, recipeUse, useDeltas } from '../utils.js';
 import { payLabel, showBillModal, printHTML, billHTML, kotHTML } from '../bill.js';
 
 export async function render(root) {
@@ -175,7 +175,7 @@ export async function render(root) {
     // remember what each line cost us today, so the profit on this bill never changes later
     let invm = null; try { const ri = await sb.from('inventory').select('*'); if (!ri.error) invm = invMapOf(ri.data); } catch { /* sale still goes through, just without cost */ }
     const withCost = l => ({ item_id: l.item_id, name: l.name, qty: l.qty, unit: l.unit,
-      ...(invm ? { cost: itemCost(items.find(x => x.id === l.item_id) || {}, invm) } : {}),
+      ...(invm ? { cost: itemCost(items.find(x => x.id === l.item_id) || {}, invm), use: recipeUse(items.find(x => x.id === l.item_id), invm) } : {}),
       addons: l.addons.map(a => ({ ...a, ...(invm ? { cost: num((addons.find(x => x.id === a.id) || {}).cost) } : {}) })) });
     const order = {
       id: crypto.randomUUID(),
@@ -200,6 +200,11 @@ export async function render(root) {
       const used = {};
       cart.forEach(l => { used[l.item_id] = (used[l.item_id] || 0) + l.qty; });
       await Promise.all(Object.entries(used).map(([id, q]) => sb.rpc('adjust_stock', { p_item: id, p_delta: -q })));
+      // ingredients used (from each item's recipe: pcs / kg / g ...) come out of the inventory - never blocks the sale
+      try {
+        const ch = useDeltas(order.items.map(l => ({ use: l.use, times: l.qty })), -1);
+        if (ch.length) { const { error: ie } = await sb.rpc('adjust_inventory_bulk', { p_changes: ch }); if (ie) console.warn('inventory not reduced (run sql/update-9.sql)', ie); }
+      } catch (e) { console.warn('inventory not reduced', e); }
       const { data: fresh } = await sb.from('items').select('*').eq('active', true).order('name');
       if (fresh) items = fresh;
       resetOrder();

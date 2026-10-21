@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal, netTotal } from '../utils.js';
+import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal, netTotal, orderCost, hasCost, r2 } from '../utils.js';
 
 export async function render(root) {
   let range = 'month', lastSig = '', busy = false, dead = false;
@@ -35,6 +35,12 @@ export async function render(root) {
       const split = list => ['dine_in', 'takeaway'].map(t => { const l = list.filter(o => o.order_type === t); return { n: l.length, t: sum(l) }; });
       const [tDine, tTake] = split(todayOrders), [mDine, mTake] = split(monthOrders);
 
+      // profit = sales (after refunds) - what the items cost us when they were sold. Bills from before costs existed are left out.
+      const profitCard = (label, list) => {
+        const known = list.filter(hasCost), rev = sum(known), cost = r2(known.reduce((n, o) => n + orderCost(o), 0)), p = r2(rev - cost), old = list.length - known.length;
+        return `<div class="stat ${p < 0 ? '' : 'gold'}"><div class="k">${label}</div><div class="v" style="color:var(--${p < 0 ? 'bad' : 'ok'})">${money(p)}</div>
+          <div class="s">${rev ? Math.round(p / rev * 100) + '% of sales' : 'no sales yet'}${old ? ` · ${old} old bill${old > 1 ? 's' : ''} not counted` : ''}</div></div>`;
+      };
       const days = [...Array(7)].map((_, i) => { const d = now - (6 - i) * 864e5; return { k: dstr(d), l: weekday(d), t: 0 }; });
       orders.forEach(o => { const d = days.find(x => x.k === dstr(o.created_at)); if (d) d.t += netTotal(o); });
       const maxDay = Math.max(1, ...days.map(d => d.t));
@@ -113,6 +119,8 @@ export async function render(root) {
         <div class="grid-cards">
           <div class="stat gold"><div class="k">Today's sale</div><div class="v">${money(sum(todayOrders))}</div><div class="s">${todayOrders.length} orders</div></div>
           <div class="stat gold"><div class="k">This month</div><div class="v">${money(sum(monthOrders))}</div><div class="s">${monthOrders.length} orders</div></div>
+          ${profitCard("Today's profit", todayOrders)}
+          ${profitCard("This month's profit", monthOrders)}
           <div class="stat"><div class="k">Average bill (today)</div><div class="v">${money(todayOrders.length ? sum(todayOrders) / todayOrders.length : 0)}</div></div>
           <div class="stat"><div class="k">Pending in kitchen</div><div class="v">${orders.filter(o => o.status === 'pending').length}</div></div>
         </div>

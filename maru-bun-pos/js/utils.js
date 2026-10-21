@@ -53,6 +53,16 @@ export const invMapOf = rows => Object.fromEntries((rows || []).map(r => [r.id, 
 export function recipeCost(recipe, inv) {          // cost of everything in one item
   return (recipe || []).reduce((n, r) => { const i = inv[r.inv_id]; if (!i) return n; const q = convertQty(r.qty, r.unit, i.unit); return n + (q == null ? 0 : q * num(i.cost_per_unit)); }, 0);
 }
+// what ONE sale of this item takes out of the inventory, in each ingredient's own unit: [{inv_id, qty}]
+export function recipeUse(it, inv) {
+  return ((it && it.recipe) || []).map(r => { const i = inv[r.inv_id]; const q = i ? convertQty(r.qty, r.unit, i.unit) : null; return q == null || !(q > 0) ? null : { inv_id: r.inv_id, qty: Math.round(q * 10000) / 10000 }; }).filter(Boolean);
+}
+// [{id, delta}] for add/remove of ingredients: lines = [{use:[{inv_id,qty}], times}] ; sign = -1 (sold) or +1 (refunded back)
+export function useDeltas(lines, sign) {
+  const m = {};
+  lines.forEach(({ use, times }) => (use || []).forEach(u => { m[u.inv_id] = (m[u.inv_id] || 0) + sign * u.qty * times; }));
+  return Object.entries(m).map(([id, delta]) => ({ id, delta: Math.round(delta * 10000) / 10000 })).filter(x => x.delta);
+}
 export const itemCost = (it, inv) => r2(it.cost_manual ? num(it.cost) : recipeCost(it.recipe, inv));
 // cost of a saved bill: every line remembers its own cost when it was sold. Refunded + put-back-in-stock items give their cost back.
 export const hasCost = o => (o.items || []).length > 0 && (o.items || []).every(l => l.cost !== undefined && l.cost !== null);

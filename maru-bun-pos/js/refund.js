@@ -1,7 +1,7 @@
 // Orders & Billing: change an order's type / payment, and refund items
 import { sb } from './sb.js';
 import { state, getCashier } from './state.js';
-import { esc, fmt, money, num, r2, toast, modal, ico, errMsg, lineRows } from './utils.js';
+import { esc, fmt, money, num, r2, toast, modal, ico, errMsg, lineRows, useDeltas } from './utils.js';
 import { payLabel, typeLabel } from './bill.js';
 import { isAdminDevice, verifyAdmin } from './device.js';
 
@@ -119,6 +119,12 @@ export function openRefund(o, done) {
     const { error } = await sb.from('orders').update({ refund_total: r2(num(cur.refund_total) + amount), refunds: [...log(cur, 'refunds'), entry] }).eq('id', o.id);
     if (error) { el('#rGo').disabled = false; return toast(errMsg(error) + ' (run sql/update-7.sql)', 'err', 7000); }
     if (restock) await Promise.all(rows.filter(r => r.item_id && (sel[r.key] || 0) > 0).map(r => sb.rpc('adjust_stock', { p_item: r.item_id, p_delta: sel[r.key] })));
+    if (restock) {                                    // ingredients of the refunded items go back into the inventory too
+      try {
+        const ch = useDeltas(rows.filter(r => /^i\d+$/.test(r.key) && (sel[r.key] || 0) > 0).map(r => ({ use: ((cur.items || [])[Number(r.key.slice(1))] || {}).use, times: sel[r.key] })), 1);
+        if (ch.length) await sb.rpc('adjust_inventory_bulk', { p_changes: ch });
+      } catch (e) { console.warn('ingredients not put back', e); }
+    }
     toast(`Refunded ${money(amount)}`); m.close(); window.dispatchEvent(new Event('orders-changed')); done(o.id);
   };
   paint();

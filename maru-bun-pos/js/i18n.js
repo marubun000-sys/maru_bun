@@ -87,7 +87,10 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Add stock': 'තොගය එක් කරන්න', '± Use / waste': '± භාවිතය / නාස්තිය', 'Cost per unit': 'ඒකකයක පිරිවැය', 'Stock value': 'තොගයේ වටිනාකම', 'not set': 'සකසා නැත',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Forgot password?': 'මුරපදය අමතකද?', 'Forgot password': 'මුරපදය අමතකයි', 'Send reset link': 'යළි සැකසීමේ සබැඳිය යවන්න', 'Back to sign in': 'පිවිසුමට ආපසු', 'Check your email': 'ඔබේ ඊමේල් බලන්න',
+  'Reset password': 'මුරපදය යළි සකසන්න', 'Choose a new password': 'නව මුරපදයක් තෝරන්න', 'New password': 'නව මුරපදය', 'Repeat': 'නැවත', 'Save new password': 'නව මුරපදය සුරකින්න', 'Verify': 'තහවුරු කරන්න',
+  'Enter the 6-digit code from your authenticator app': 'ඔබේ authenticator යෙදුමේ ඉලක්කම් 6 කේතය ඇතුළත් කරන්න', 'Password changed – sign in with the new password': 'මුරපදය වෙනස් කළා – නව මුරපදයෙන් පිවිසෙන්න',
+  'Security alert': 'ආරක්ෂක අනතුරු ඇඟවීම', 'OK, I know': 'හරි, දනිමි', 'Confirm': 'තහවුරු කරන්න',  "Today's profit": 'අද ලාභය', "This month's profit": 'මෙම මාසයේ ලාභය', 'Add stock': 'තොගය එක් කරන්න', '± Use / waste': '± භාවිතය / නාස්තිය', 'Cost per unit': 'ඒකකයක පිරිවැය', 'Stock value': 'තොගයේ වටිනාකම', 'not set': 'සකසා නැත',
   'Quantity bought': 'මිලදී ගත් ප්‍රමාණය', 'Total price paid (LKR)': 'ගෙවූ මුළු මිල (රු.)', 'Add to stock': 'තොගයට එක් කරන්න', 'Stock added': 'තොගය එක් කළා',
   'Cost (LKR)': 'පිරිවැය (රු.)', 'Profit': 'ලාභය', 'Cost of this item': 'මෙම අයිතමයේ පිරිවැය', 'Add ingredient': 'අමුද්‍රව්‍යයක් එක් කරන්න', 'I will type the cost myself': 'පිරිවැය මම අතින් ඇතුළත් කරමි',
   'Cost of one item (LKR)': 'එක් අයිතමයක පිරිවැය (රු.)', 'Cost to you (LKR)': 'ඔබට වන පිරිවැය (රු.)', 'Profit from these bills': 'මෙම බිල්පත් වලින් ලාභය', 'Purchase history': 'මිලදී ගැනීම් ඉතිහාසය',
@@ -129,6 +132,9 @@ const PATTERNS = [
   [/^(\d+) bills · avg (.*)$/, 'බිල්පත් $1 · සාමාන්‍ය $2'],
   [/^(\d+) bills · average per bill (.*)$/, 'බිල්පත් $1 · බිල්පතක සාමාන්‍යය $2'],
   [/^profit (.*)$/, 'ලාභය $1'],
+  [/^(\d+)% of sales · (\d+) old bills? not counted$/, 'විකුණුම් වලින් $1% · පරණ බිල්පත් $2ක් ගණන් ගන්නේ නැත'],
+  [/^(\d+)% of sales$/, 'විකුණුම් වලින් $1%'],
+  [/^no sales yet$/, 'තවම විකුණුම් නැත'],
   [/^(\d+)% of sales · sales (.*) − cost (.*)$/, 'විකුණුම් වලින් $1% · විකුණුම් $2 − පිරිවැය $3'],
   [/^sales (.*) − cost (.*)$/, 'විකුණුම් $1 − පිරිවැය $2'],
   [/^(\d+) older bills? without cost are not counted$/, 'පිරිවැය නොමැති පරණ බිල්පත් $1ක් ගණන් ගන්නේ නැත'],
