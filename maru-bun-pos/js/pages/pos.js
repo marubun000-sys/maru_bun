@@ -1,6 +1,6 @@
 import { sb } from '../sb.js';
 import { state, getCashier, setCashier } from '../state.js';
-import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone, promptModal } from '../utils.js';
+import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, lineTotal, normPhone, promptModal, itemCost, invMapOf } from '../utils.js';
 import { payLabel, showBillModal, printHTML, billHTML, kotHTML } from '../bill.js';
 
 export async function render(root) {
@@ -172,11 +172,16 @@ export async function render(root) {
     const c = calc(), got = num(cash);
     if (pay === 'cash' && cash !== '' && got < c.total) return toast(`Cash received is less than the total (short ${money(c.total - got)})`, 'err');
     placing = true; $('#place').disabled = true;
+    // remember what each line cost us today, so the profit on this bill never changes later
+    let invm = null; try { const ri = await sb.from('inventory').select('*'); if (!ri.error) invm = invMapOf(ri.data); } catch { /* sale still goes through, just without cost */ }
+    const withCost = l => ({ item_id: l.item_id, name: l.name, qty: l.qty, unit: l.unit,
+      ...(invm ? { cost: itemCost(items.find(x => x.id === l.item_id) || {}, invm) } : {}),
+      addons: l.addons.map(a => ({ ...a, ...(invm ? { cost: num((addons.find(x => x.id === a.id) || {}).cost) } : {}) })) });
     const order = {
       id: crypto.randomUUID(),
       order_type: orderType, table_no: $('#table').value.trim(), customer_name: $('#cname').value.trim(), customer_phone: $('#cphone').value.trim(),
       note: $('#note').value.trim(),
-      items: cart.map(l => ({ item_id: l.item_id, name: l.name, qty: l.qty, unit: l.unit, addons: l.addons.map(a => ({ ...a })) })),
+      items: cart.map(withCost),
       subtotal: c.sub, discount: c.disc, discount_label: c.disc > 0 ? (discType === 'pct' ? `${discVal}%` : 'LKR') : '',
       service_pct: c.pct, service_charge: c.sc, total: c.total, payment_method: pay,
       cash_received: pay === 'cash' ? got : 0, change_given: pay === 'cash' && got > c.total ? r2(got - c.total) : 0,

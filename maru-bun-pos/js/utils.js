@@ -37,6 +37,34 @@ export function lineRows(l) {
   const unit = legacy ? r2(num(l.unit) - ad.reduce((n, a) => n + num(a.price), 0)) : num(l.unit);
   return { name: l.name, qty: num(l.qty), unit, total: r2(unit * num(l.qty)), extras };
 }
+// ---- costs & profit ----
+// units that can be converted into each other (stock in kg, recipe in g ...)
+const UNITS = { g: ['w', 1], kg: ['w', 1000], gram: ['w', 1], grams: ['w', 1], ml: ['v', 1], l: ['v', 1000], lt: ['v', 1000], ltr: ['v', 1000], litre: ['v', 1000], liter: ['v', 1000] };
+const uinfo = u => { const k = String(u || '').trim().toLowerCase(); return UNITS[k] || [k, 1]; };
+export function unitChoices(invUnit) {             // units a recipe line may use for this ingredient
+  const [fam] = uinfo(invUnit);
+  return fam === 'w' ? ['g', 'kg'] : fam === 'v' ? ['ml', 'L'] : [String(invUnit || 'pcs')];
+}
+export function convertQty(q, from, to) {          // null when the units do not match (e.g. g -> pcs)
+  const [f1, m1] = uinfo(from), [f2, m2] = uinfo(to);
+  return f1 === f2 ? num(q) * m1 / m2 : null;
+}
+export const invMapOf = rows => Object.fromEntries((rows || []).map(r => [r.id, r]));
+export function recipeCost(recipe, inv) {          // cost of everything in one item
+  return (recipe || []).reduce((n, r) => { const i = inv[r.inv_id]; if (!i) return n; const q = convertQty(r.qty, r.unit, i.unit); return n + (q == null ? 0 : q * num(i.cost_per_unit)); }, 0);
+}
+export const itemCost = (it, inv) => r2(it.cost_manual ? num(it.cost) : recipeCost(it.recipe, inv));
+// cost of a saved bill: every line remembers its own cost when it was sold. Refunded + put-back-in-stock items give their cost back.
+export const hasCost = o => (o.items || []).length > 0 && (o.items || []).every(l => l.cost !== undefined && l.cost !== null);
+export function orderCost(o) {
+  const L = o.items || []; let c = 0;
+  L.forEach(l => { c += num(l.qty) * num(l.cost); (l.addons || []).forEach(a => { c += num(a.qty) * num(a.cost); }); });
+  (o.refunds || []).forEach(rf => { if (!rf.restock) return; (rf.items || []).forEach(it => {
+    const m = /^i(\d+)(?:x(\d+))?$/.exec(it.key || ''); if (!m) return; const l = L[Number(m[1])]; if (!l) return;
+    c -= num(it.qty) * (m[2] != null ? num(((l.addons || [])[Number(m[2])] || {}).cost) : num(l.cost));
+  }); });
+  return r2(c);
+}
 export const netTotal = o => r2(num(o.total) - num(o.refund_total));
 export const lineTotal = l => { const r = lineRows(l); return r2(r.total + r.extras.reduce((n, e) => n + e.total, 0)); };
 // Sri Lankan numbers -> international format for wa.me (0771234567 -> 94771234567)

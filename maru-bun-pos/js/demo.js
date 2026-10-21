@@ -33,10 +33,10 @@ const save = d => localStorage.setItem(KEY, JSON.stringify(d));
 
 const DEFAULTS = {
   orders: d => ({ token_no: (() => { const day = x => new Date(new Date(x).getTime() + 19800000).toISOString().slice(0, 10), t = day(Date.now()); return d.orders.filter(o => day(o.created_at) === t).reduce((n, o) => Math.max(n, o.token_no || 0), 0) + 1; })(), bill_no: ++d._seq, order_type: 'dine_in', table_no: '', customer_name: '', customer_phone: '', note: '', items: [], subtotal: 0, discount: 0, discount_label: '', service_pct: 0, service_charge: 0, total: 0, payment_method: 'cash', cash_received: 0, change_given: 0, cashier: '', status: 'pending', served_at: null, refund_total: 0, refunds: [], edits: [] }),
-  items: () => ({ price: 0, allow_addons: true, track_stock: true, stock: 0, low_stock: 5, active: true, category_id: null }),
+  items: () => ({ cost: 0, cost_manual: false, recipe: [], price: 0, allow_addons: true, track_stock: true, stock: 0, low_stock: 5, active: true, category_id: null }),
   categories: () => ({ sort: 0 }),
-  addons: () => ({ price: 0, active: true }),
-  inventory: () => ({ unit: 'pcs', qty: 0, low_level: 0 }),
+  addons: () => ({ price: 0, cost: 0, active: true }),
+  inventory: () => ({ unit: 'pcs', qty: 0, low_level: 0, cost_per_unit: 0 }),
 };
 
 class Q {
@@ -108,6 +108,18 @@ export function createDemo() {
       if (name === 'adjust_stock') {
         const d = load(); const r = d.items.find(x => x.id === a.p_item);
         if (r && r.track_stock) { r.stock += a.p_delta; save(d); }
+      }
+      if (name === 'add_stock') {
+        const d = load(); const r = d.inventory.find(x => x.id === a.p_id);
+        if (!r) return { data: null, error: { message: 'Ingredient not found' } };
+        if (!(a.p_qty > 0)) return { data: null, error: { message: 'Quantity must be more than 0' } };
+        const base = Math.max(+r.qty || 0, 0), tot = +a.p_total || 0;
+        r.cost_per_unit = (+r.cost_per_unit || 0) === 0 ? Math.round(tot / a.p_qty * 1e4) / 1e4 : Math.round(((base * r.cost_per_unit + tot) / (base + a.p_qty)) * 1e4) / 1e4;
+        r.qty = Math.round((+r.qty + a.p_qty) * 100) / 100;
+        d.inventory_purchases = d.inventory_purchases || [];
+        d.inventory_purchases.push({ id: uid(), inventory_id: r.id, qty: a.p_qty, total_cost: tot, unit_cost: Math.round(tot / a.p_qty * 1e4) / 1e4, by_name: a.p_by || '', created_at: iso() });
+        save(d); emit({ eventType: 'UPDATE', table: 'inventory', new: { ...r }, old: {} });
+        return { data: { ...r }, error: null };
       }
       if (name === 'register_device') {
         const d = load(); d.devices = d.devices || []; const now = iso();

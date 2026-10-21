@@ -87,7 +87,11 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Bills in the list below': 'පහළ ලැයිස්තුවේ බිල්පත්', 'Back to today': 'අදට ආපසු', 'Days with refunds': 'ආපසු දීම් තිබූ දවස්', 'No refunds today 👍': 'අද ආපසු දීම් නැත 👍', 'No refunds on this day': 'මේ දවසේ ආපසු දීම් නැත', '✔ Added back': '✔ තොගයට එකතු කළා', '✖ Not added back': '✖ තොගයට එකතු කළේ නැත', 'No refunds 👍': 'ආපසු දීම් නැත 👍',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Add stock': 'තොගය එක් කරන්න', '± Use / waste': '± භාවිතය / නාස්තිය', 'Cost per unit': 'ඒකකයක පිරිවැය', 'Stock value': 'තොගයේ වටිනාකම', 'not set': 'සකසා නැත',
+  'Quantity bought': 'මිලදී ගත් ප්‍රමාණය', 'Total price paid (LKR)': 'ගෙවූ මුළු මිල (රු.)', 'Add to stock': 'තොගයට එක් කරන්න', 'Stock added': 'තොගය එක් කළා',
+  'Cost (LKR)': 'පිරිවැය (රු.)', 'Profit': 'ලාභය', 'Cost of this item': 'මෙම අයිතමයේ පිරිවැය', 'Add ingredient': 'අමුද්‍රව්‍යයක් එක් කරන්න', 'I will type the cost myself': 'පිරිවැය මම අතින් ඇතුළත් කරමි',
+  'Cost of one item (LKR)': 'එක් අයිතමයක පිරිවැය (රු.)', 'Cost to you (LKR)': 'ඔබට වන පිරිවැය (රු.)', 'Profit from these bills': 'මෙම බිල්පත් වලින් ලාභය', 'Purchase history': 'මිලදී ගැනීම් ඉතිහාසය',
+  'Bought': 'මිලදී ගත්', 'Paid': 'ගෙවූ', 'Add ingredients in Inventory first': 'මුලින් Inventory හි අමුද්‍රව්‍ය එක් කරන්න',  'Bills in the list below': 'පහළ ලැයිස්තුවේ බිල්පත්', 'Back to today': 'අදට ආපසු', 'Days with refunds': 'ආපසු දීම් තිබූ දවස්', 'No refunds today 👍': 'අද ආපසු දීම් නැත 👍', 'No refunds on this day': 'මේ දවසේ ආපසු දීම් නැත', '✔ Added back': '✔ තොගයට එකතු කළා', '✖ Not added back': '✖ තොගයට එකතු කළේ නැත', 'No refunds 👍': 'ආපසු දීම් නැත 👍',
   'Refund': 'මුදල් ආපසු', 'Change type / payment': 'වර්ගය / ගෙවීම වෙනස් කරන්න', '↗ Open as kitchen screen': '↗ කුස්සි තිරයක් ලෙස විවෘත කරන්න', 'Refund everything left': 'ඉතිරි සියල්ල ආපසු දෙන්න',
   'Reason (optional)': 'හේතුව (අවශ්‍ය නම්)', 'Put the refunded items back in stock': 'ආපසු දුන් අයිතම තොගයට එකතු කරන්න', 'Admin approval needed': 'පරිපාලක අනුමැතිය අවශ්‍යයි',
   'Recently served': 'මෑතදී සේවය කළ', 'Edited': 'වෙනස් කළා', 'Part refund': 'කොටසක් ආපසු', 'Refunded': 'ආපසු දුන්',
@@ -124,6 +128,11 @@ const PATTERNS = [
   [/^(\d+) bills$/, 'බිල්පත් $1'],
   [/^(\d+) bills · avg (.*)$/, 'බිල්පත් $1 · සාමාන්‍ය $2'],
   [/^(\d+) bills · average per bill (.*)$/, 'බිල්පත් $1 · බිල්පතක සාමාන්‍යය $2'],
+  [/^profit (.*)$/, 'ලාභය $1'],
+  [/^(\d+)% of sales · sales (.*) − cost (.*)$/, 'විකුණුම් වලින් $1% · විකුණුම් $2 − පිරිවැය $3'],
+  [/^sales (.*) − cost (.*)$/, 'විකුණුම් $1 − පිරිවැය $2'],
+  [/^(\d+) older bills? without cost are not counted$/, 'පිරිවැය නොමැති පරණ බිල්පත් $1ක් ගණන් ගන්නේ නැත'],
+  [/^⚠ (\d+) bills? (?:have|has) items with no cost set$/, '⚠ පිරිවැය සකසා නැති අයිතම ඇති බිල්පත් $1ක්'],
   [/^(\d+) orders$/, 'ඇණවුම් $1'],
   [/^(\d+) min$/, 'මිනිත්තු $1'],
   [/^(\d+) running low$/, '$1 ක් අඩුයි'],

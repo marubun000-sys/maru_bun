@@ -130,3 +130,12 @@ WhatsApp does not let any app send to many people from your normal WhatsApp. The
 - Settings access requests ("Allow / Deny") and "new device waiting" alerts appear **only on the admin POS page** – never on the kitchen screen page (`kitchen.html`), even if it is open in the same browser.
 - **Dashboard → Refunded items**: every refunded item with quantity and amount (Today / This month switch), and whether it was added back to stock.
 - Refunded items are **put back in stock by default** (the tick can be removed in the refund window).
+
+
+## Update 11 – Costs, ingredient prices & profit
+Run **sql/update-8.sql** in the Supabase SQL Editor (safe to run again).
+- **Inventory → Add stock**: enter how much you bought (kg or g, L or ml…) and the **total price you paid**. The cost per unit is averaged with the stock you already have (first purchase on unpriced stock sets the price). **🧾** shows every purchase and the total spent. Edit an ingredient to type a cost by hand.
+- **Menu → Items → Edit**: add the ingredients of ONE item (e.g. 1 bun + 10 g cheese). The cost and profit are worked out from the inventory prices, or tick "I will type the cost myself". Extras have their own cost.
+- **POS**: every bill remembers the cost at the time of sale (profit of old bills never changes).
+- **Orders & Billing**: "Profit from these bills" card (for the bills in the list below) + profit under every bill; CSV has Cost and Profit columns. Bills made before this update have no cost and are not counted.
+- Note: selling an item does not reduce the ingredient stock automatically (recipes are used for costing).
