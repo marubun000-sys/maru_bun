@@ -147,3 +147,9 @@ Run **sql/update-9.sql** in the Supabase SQL Editor (safe to run again).
 - **Forgot password** (login page): 1) enter the account email -> a reset link is emailed, 2) open the link on the device, enter the 6-digit code from the authenticator app, 3) choose a new password.
   In Supabase: Authentication -> URL Configuration -> add your site address (https://cerulean-haupia-244018.netlify.app) to **Redirect URLs**.
 - **Settings & Security**: changing the password or turning 2-step OFF always asks for the authenticator code. When this is done from a device that is not the admin device, the admin device gets a "Security alert" pop-up.
+
+
+## Update 13 – Dashboard: stock bought, loss, monthly profit
+- Dashboard: **Stock bought (this month)** = total price of everything added with Inventory -> Add stock (today's amount underneath).
+- Dashboard: **Loss – refunded, not put back** = cost of refunded items that were not returned to stock.
+- **This month's profit** now includes bills made before costs existed: they are ESTIMATED with today's item costs (shown as "N old bills estimated", and "(est.)" next to a bill's profit). Bills made after the cost update use their own saved cost.

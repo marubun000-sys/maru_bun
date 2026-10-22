@@ -87,7 +87,7 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Forgot password?': 'මුරපදය අමතකද?', 'Forgot password': 'මුරපදය අමතකයි', 'Send reset link': 'යළි සැකසීමේ සබැඳිය යවන්න', 'Back to sign in': 'පිවිසුමට ආපසු', 'Check your email': 'ඔබේ ඊමේල් බලන්න',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Stock bought (this month)': 'තොග මිලදී ගැනීම (මෙම මාසය)', 'Loss – refunded, not put back (this month)': 'පාඩුව – ආපසු දුන්, තොගයට නොදැමූ (මෙම මාසය)', 'Forgot password?': 'මුරපදය අමතකද?', 'Forgot password': 'මුරපදය අමතකයි', 'Send reset link': 'යළි සැකසීමේ සබැඳිය යවන්න', 'Back to sign in': 'පිවිසුමට ආපසු', 'Check your email': 'ඔබේ ඊමේල් බලන්න',
   'Reset password': 'මුරපදය යළි සකසන්න', 'Choose a new password': 'නව මුරපදයක් තෝරන්න', 'New password': 'නව මුරපදය', 'Repeat': 'නැවත', 'Save new password': 'නව මුරපදය සුරකින්න', 'Verify': 'තහවුරු කරන්න',
   'Enter the 6-digit code from your authenticator app': 'ඔබේ authenticator යෙදුමේ ඉලක්කම් 6 කේතය ඇතුළත් කරන්න', 'Password changed – sign in with the new password': 'මුරපදය වෙනස් කළා – නව මුරපදයෙන් පිවිසෙන්න',
   'Security alert': 'ආරක්ෂක අනතුරු ඇඟවීම', 'OK, I know': 'හරි, දනිමි', 'Confirm': 'තහවුරු කරන්න',  "Today's profit": 'අද ලාභය', "This month's profit": 'මෙම මාසයේ ලාභය', 'Add stock': 'තොගය එක් කරන්න', '± Use / waste': '± භාවිතය / නාස්තිය', 'Cost per unit': 'ඒකකයක පිරිවැය', 'Stock value': 'තොගයේ වටිනාකම', 'not set': 'සකසා නැත',
@@ -132,12 +132,14 @@ const PATTERNS = [
   [/^(\d+) bills · avg (.*)$/, 'බිල්පත් $1 · සාමාන්‍ය $2'],
   [/^(\d+) bills · average per bill (.*)$/, 'බිල්පත් $1 · බිල්පතක සාමාන්‍යය $2'],
   [/^profit (.*)$/, 'ලාභය $1'],
+  [/^today (.*)$/, 'අද $1'],
+  [/^(\d+)% of sales · (\d+) old bills? estimated$/, 'විකුණුම් වලින් $1% · පරණ බිල්පත් $2ක් ඇස්තමේන්තුවෙන්'],
   [/^(\d+)% of sales · (\d+) old bills? not counted$/, 'විකුණුම් වලින් $1% · පරණ බිල්පත් $2ක් ගණන් ගන්නේ නැත'],
   [/^(\d+)% of sales$/, 'විකුණුම් වලින් $1%'],
   [/^no sales yet$/, 'තවම විකුණුම් නැත'],
   [/^(\d+)% of sales · sales (.*) − cost (.*)$/, 'විකුණුම් වලින් $1% · විකුණුම් $2 − පිරිවැය $3'],
   [/^sales (.*) − cost (.*)$/, 'විකුණුම් $1 − පිරිවැය $2'],
-  [/^(\d+) older bills? without cost are not counted$/, 'පිරිවැය නොමැති පරණ බිල්පත් $1ක් ගණන් ගන්නේ නැත'],
+  [/^(\d+) older bills? estimated with today's costs$/, 'පරණ බිල්පත් $1ක් අදහසින් (අද පිරිවැයෙන්)'],
   [/^⚠ (\d+) bills? (?:have|has) items with no cost set$/, '⚠ පිරිවැය සකසා නැති අයිතම ඇති බිල්පත් $1ක්'],
   [/^(\d+) orders$/, 'ඇණවුම් $1'],
   [/^(\d+) min$/, 'මිනිත්තු $1'],

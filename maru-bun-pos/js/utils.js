@@ -75,6 +75,16 @@ export function orderCost(o) {
   }); });
   return r2(c);
 }
+// Cost of any bill. Bills saved after costs existed remember their own cost; older bills are ESTIMATED with today's item / extra costs.
+export function costBook(items, inv, addons) {
+  const im = Object.fromEntries((items || []).map(i => [i.id, i])), am = Object.fromEntries((addons || []).map(a => [a.id, a]));
+  return { item: id => (im[id] ? itemCost(im[id], inv) : 0), addon: id => (am[id] ? num(am[id].cost) : 0) };
+}
+export function orderCostAny(o, book) {
+  if (hasCost(o)) return { cost: orderCost(o), est: false };
+  const L = (o.items || []).map(l => ({ ...l, cost: l.cost ?? book.item(l.item_id), addons: (l.addons || []).map(a => ({ ...a, qty: a.qty ?? l.qty, cost: a.cost ?? book.addon(a.id) })) }));
+  return { cost: orderCost({ ...o, items: L }), est: true };
+}
 export const netTotal = o => r2(num(o.total) - num(o.refund_total));
 export const lineTotal = l => { const r = lineRows(l); return r2(r.total + r.extras.reduce((n, e) => n + e.total, 0)); };
 // Sri Lankan numbers -> international format for wa.me (0771234567 -> 94771234567)

@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive, lineRows, netTotal, orderCost, hasCost, r2 } from '../utils.js';
+import { $, $$, esc, fmt, money, billNo, dstr, tstr, dtstr, dayRangeStr, monthRange, ymOf, fetchOrders, downloadCSV, toast, errMsg, onLive, lineRows, netTotal, orderCost, hasCost, r2, costBook, orderCostAny, invMapOf } from '../utils.js';
 import { showBillModal, typeLabel, payLabel } from '../bill.js';
 import { openEdit, openRefund } from '../refund.js';
 
@@ -23,12 +23,17 @@ export async function render(root) {
     <div class="tbl-wrap"><table><thead><tr><th>Token</th><th>Bill</th><th>Date & time</th><th>Customer</th><th>Type</th><th>Payment</th><th>Status</th><th class="r">Total (LKR)</th></tr></thead><tbody id="rows"></tbody></table></div>`;
 
   const sum = arr => arr.reduce((n, o) => n + netTotal(o), 0);
-  const profitOf = o => (hasCost(o) ? r2(netTotal(o) - orderCost(o)) : null);        // null = old bill saved before costs existed
+  let book = costBook([], {}, []);                                                      // costs of today's items (used to estimate old bills)
+  const profitOf = o => r2(netTotal(o) - orderCostAny(o, book).cost);
   const noCostSet = o => hasCost(o) && o.items.some(l => !Number(l.cost));          // an item on it has no cost typed / worked out
 
   async function load() {
     $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Loading…</td></tr>';
     try {
+      try {
+        const [ci, cv, ca] = await Promise.all([sb.from('items').select('*'), sb.from('inventory').select('*'), sb.from('addons').select('*')]);
+        if (!ci.error && !cv.error && !ca.error) book = costBook(ci.data, invMapOf(cv.data), ca.data);
+      } catch { /* profit of old bills just stays 0 cost */ }
       const nowYm = ymOf();
       cur = await fetchOrders(sb, ...monthRange(nowYm));
       if (mode === 'month' && ym === nowYm) view = cur;
@@ -48,8 +53,7 @@ export async function render(root) {
   function draw() {
     const todayList = cur.filter(o => dstr(o.created_at) === dstr(new Date()));
     const list = filtered();
-    const known = list.filter(hasCost);
-    const profitCard = { rev: sum(known), cost: r2(known.reduce((n, o) => n + orderCost(o), 0)), old: list.length - known.length, nc: list.filter(noCostSet).length };
+    const profitCard = { rev: sum(list), cost: r2(list.reduce((n, o) => n + orderCostAny(o, book).cost, 0)), old: list.filter(o => !hasCost(o)).length, nc: list.filter(noCostSet).length };
     profitCard.p = r2(profitCard.rev - profitCard.cost);
     const scope = [mode === 'today' ? 'Today' : mode === 'month' ? ym : day, ftype ? typeLabel(ftype) : '', fpay ? payLabel(fpay) : '', search ? `"${search}"` : ''].filter(Boolean).join(' · ');
     $('#cards').innerHTML = `
@@ -58,7 +62,7 @@ export async function render(root) {
       <div class="stat"><div class="k">Bills in the list below</div><div class="v">${money(sum(list))}</div><div class="s">${list.length} bills${list.length ? ' · average per bill ' + fmt(sum(list) / list.length) : ''}</div><div class="s" data-noi18n>${esc(scope)}</div></div>
       <div class="stat ${profitCard.p < 0 ? '' : 'gold'}"><div class="k">Profit from these bills</div><div class="v" style="color:var(--${profitCard.p < 0 ? 'bad' : 'ok'})">${money(profitCard.p)}</div>
         <div class="s">${profitCard.rev ? Math.round(profitCard.p / profitCard.rev * 100) + '% of sales · ' : ''}sales ${fmt(profitCard.rev)} − cost ${fmt(profitCard.cost)}</div>
-        ${profitCard.old ? `<div class="s">${profitCard.old} older bill${profitCard.old > 1 ? 's' : ''} without cost are not counted</div>` : ''}${profitCard.nc ? `<div class="s" style="color:var(--gold)">⚠ ${profitCard.nc} bill${profitCard.nc > 1 ? 's have' : ' has'} items with no cost set</div>` : ''}</div>
+        ${profitCard.old ? `<div class="s">${profitCard.old} older bill${profitCard.old > 1 ? 's' : ''} estimated with today's costs</div>` : ''}${profitCard.nc ? `<div class="s" style="color:var(--gold)">⚠ ${profitCard.nc} bill${profitCard.nc > 1 ? 's have' : ' has'} items with no cost set</div>` : ''}</div>
       <div class="stat"><div class="k">Dine-in / Takeaway</div><div class="v">${list.filter(o => o.order_type === 'dine_in').length} / ${list.filter(o => o.order_type === 'takeaway').length}</div><div class="s">in this view</div></div>`;
 
     // daily breakdown for month view
@@ -77,7 +81,7 @@ export async function render(root) {
       <td><span class="pill ${o.order_type === 'takeaway' ? 'info' : ''}">${typeLabel(o.order_type)}</span></td>
       <td>${payLabel(o.payment_method)}</td>
       <td><span class="pill ${o.status === 'served' ? 'ok' : 'warn'}">${o.status === 'served' ? 'Served' : 'In kitchen'}</span>${Number(o.refund_total) > 0 ? ` <span class="pill bad">${netTotal(o) <= 0 ? 'Refunded' : 'Part refund'}</span>` : ''}${(o.edits || []).length ? ` <span class="pill info" title="${esc(o.edits.map(e => (e.by || '') + ': ' + e.text).join(' | '))}">Edited</span>` : ''}</td>
-      <td class="r"><b>${fmt(netTotal(o))}</b>${profitOf(o) === null ? '' : `<div class="small" style="color:var(--${profitOf(o) < 0 ? 'bad' : 'ok'})">profit ${fmt(profitOf(o))}</div>`}${Number(o.refund_total) > 0 ? `<div class="muted small">bill ${fmt(o.total)} · refund -${fmt(o.refund_total)}</div>` : ''}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">No bills found</td></tr>';
+      <td class="r"><b>${fmt(netTotal(o))}</b><div class="small" style="color:var(--${profitOf(o) < 0 ? 'bad' : 'ok'})">profit ${fmt(profitOf(o))}${hasCost(o) ? '' : ' (est.)'}</div>${Number(o.refund_total) > 0 ? `<div class="muted small">bill ${fmt(o.total)} · refund -${fmt(o.refund_total)}</div>` : ''}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">No bills found</td></tr>';
   }
 
   const manage = { edit: x => openEdit(x, reopen), refund: x => openRefund(x, reopen) };
@@ -103,7 +107,7 @@ export async function render(root) {
     const list = filtered(); if (!list.length) return toast('Nothing to export', 'err');
     downloadCSV(`bills-${mode === 'month' ? ym : mode === 'date' ? day : dstr(new Date())}.csv`, [
       ['Token', 'Bill', 'Date', 'Time', 'Customer', 'Phone', 'Type', 'Table', 'Payment', 'Subtotal', 'Discount', 'Service charge', 'Total', 'Refunded', 'Cost', 'Profit', 'Cashier', 'Status', 'Items'],
-      ...list.map(o => [o.token_no || '', billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.refund_total || 0, hasCost(o) ? orderCost(o) : '', profitOf(o) === null ? '' : profitOf(o), o.cashier, o.status, (o.items || []).map(i => { const r = lineRows(i); return `${r.qty}x ${r.name} @${r.unit}` + r.extras.map(e => ` +${e.qty}x ${e.name}`).join(''); }).join('; ')]),
+      ...list.map(o => [o.token_no || '', billNo(o.bill_no), dstr(o.created_at), tstr(o.created_at), o.customer_name, o.customer_phone, typeLabel(o.order_type), o.table_no, payLabel(o.payment_method), o.subtotal, o.discount, o.service_charge, o.total, o.refund_total || 0, orderCostAny(o, book).cost, profitOf(o), o.cashier, o.status, (o.items || []).map(i => { const r = lineRows(i); return `${r.qty}x ${r.name} @${r.unit}` + r.extras.map(e => ` +${e.qty}x ${e.name}`).join(''); }).join('; ')]),
     ]);
   };
 

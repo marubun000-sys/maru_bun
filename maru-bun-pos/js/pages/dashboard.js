@@ -1,5 +1,5 @@
 import { sb } from '../sb.js';
-import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal, netTotal, orderCost, hasCost, r2 } from '../utils.js';
+import { $, $$, esc, fmt, money, dstr, ymOf, monthRange, dayRangeStr, weekday, fetchOrders, onLive, lineTotal, netTotal, orderCost, hasCost, r2, num, costBook, orderCostAny, invMapOf } from '../utils.js';
 
 export async function render(root) {
   let range = 'month', lastSig = '', busy = false, dead = false;
@@ -13,18 +13,20 @@ export async function render(root) {
       const weekStart = dayRangeStr(dstr(now - 6 * 864e5))[0];
       const from = weekStart < mFrom ? weekStart : mFrom;
 
-      const [orders, ri, rinv, rrf] = await Promise.all([
+      const [orders, ri, rinv, rrf, rad, rpu] = await Promise.all([
         fetchOrders(sb, from, mTo),
         sb.from('items').select('*').order('name'),
         sb.from('inventory').select('*').order('name'),
         sb.from('orders').select('*').gt('refund_total', 0).order('created_at', { ascending: false }).limit(1000),   // refunds of any age
+        sb.from('addons').select('*'),
+        sb.from('inventory_purchases').select('*').gte('created_at', mFrom).lt('created_at', mTo),               // stock bought this month
       ]);
       if (rrf.error) throw rrf.error;
       if (ri.error) throw ri.error;
       const items = ri.data || [], inv = rinv.data || [];
       // skip repainting when nothing changed (auto-refresh every few seconds on every device)
       const sig = [today, orders.length, orders.reduce((n, o) => n + netTotal(o) + (o.status === 'pending' ? 1 : 0), 0),
-        items.map(i => i.id + i.stock + i.price).join(), inv.map(i => i.id + i.qty).join(),
+        items.map(i => i.id + i.stock + i.price + ':' + i.cost + (i.cost_manual ? 'm' : '') + JSON.stringify(i.recipe || '')).join(), (rpu.data || []).map(x => x.id).join(), (rad.data || []).map(a => a.id + a.cost).join(), inv.map(i => i.cost_per_unit).join(), inv.map(i => i.id + i.qty).join(),
         (rrf.data || []).map(o => o.id + ':' + o.refund_total + ':' + (o.refunds || []).length + ':' + (o.refunds || []).map(r => r.restock ? 1 : 0).join('')).join()].join('|');
       if (sig === lastSig) { busy = false; return; }
       lastSig = sig;
@@ -35,12 +37,31 @@ export async function render(root) {
       const split = list => ['dine_in', 'takeaway'].map(t => { const l = list.filter(o => o.order_type === t); return { n: l.length, t: sum(l) }; });
       const [tDine, tTake] = split(todayOrders), [mDine, mTake] = split(monthOrders);
 
-      // profit = sales (after refunds) - what the items cost us when they were sold. Bills from before costs existed are left out.
+      // profit = sales (after refunds) - what the items cost us. Bills made before costs existed use TODAY's item costs (an estimate).
+      const book = costBook(items, invMapOf(inv), rad.data || []);
       const profitCard = (label, list) => {
-        const known = list.filter(hasCost), rev = sum(known), cost = r2(known.reduce((n, o) => n + orderCost(o), 0)), p = r2(rev - cost), old = list.length - known.length;
+        let rev = 0, cost = 0, est = 0;
+        list.forEach(o => { const c = orderCostAny(o, book); rev += netTotal(o); cost += c.cost; if (c.est) est++; });
+        rev = r2(rev); cost = r2(cost); const p = r2(rev - cost);
         return `<div class="stat ${p < 0 ? '' : 'gold'}"><div class="k">${label}</div><div class="v" style="color:var(--${p < 0 ? 'bad' : 'ok'})">${money(p)}</div>
-          <div class="s">${rev ? Math.round(p / rev * 100) + '% of sales' : 'no sales yet'}${old ? ` · ${old} old bill${old > 1 ? 's' : ''} not counted` : ''}</div></div>`;
+          <div class="s">${rev ? Math.round(p / rev * 100) + '% of sales' : 'no sales yet'}${est ? ` · ${est} old bill${est > 1 ? 's' : ''} estimated` : ''}</div></div>`;
       };
+      // money spent buying stock (Inventory -> Add stock)
+      const buys = rpu.error ? [] : (rpu.data || []);
+      const boughtToday = r2(buys.filter(x => dstr(x.created_at) === today).reduce((n, x) => n + num(x.total_cost), 0)), boughtMonth = r2(buys.reduce((n, x) => n + num(x.total_cost), 0));
+      // loss = cost of refunded items that were NOT put back into stock (thrown away)
+      const lossOf = since => {
+        let t = 0;
+        (rrf.data || []).forEach(o => (o.refunds || []).forEach(rf => {
+          if (rf.restock || !since(rf.at)) return;
+          (rf.items || []).forEach(it => {
+            const m = /^i(\d+)(?:x(\d+))?$/.exec(it.key || ''); if (!m) return; const l = (o.items || [])[Number(m[1])]; if (!l) return;
+            t += num(it.qty) * (m[2] != null ? num(((l.addons || [])[Number(m[2])] || {}).cost ?? book.addon(((l.addons || [])[Number(m[2])] || {}).id)) : num(l.cost ?? book.item(l.item_id)));
+          });
+        }));
+        return r2(t);
+      };
+      const lossToday = lossOf(at => dstr(at) === today), lossMonth = lossOf(at => at >= mFrom);
       const days = [...Array(7)].map((_, i) => { const d = now - (6 - i) * 864e5; return { k: dstr(d), l: weekday(d), t: 0 }; });
       orders.forEach(o => { const d = days.find(x => x.k === dstr(o.created_at)); if (d) d.t += netTotal(o); });
       const maxDay = Math.max(1, ...days.map(d => d.t));
@@ -121,6 +142,8 @@ export async function render(root) {
           <div class="stat gold"><div class="k">This month</div><div class="v">${money(sum(monthOrders))}</div><div class="s">${monthOrders.length} orders</div></div>
           ${profitCard("Today's profit", todayOrders)}
           ${profitCard("This month's profit", monthOrders)}
+          <div class="stat"><div class="k">Stock bought (this month)</div><div class="v">${money(boughtMonth)}</div><div class="s">today ${fmt(boughtToday)}</div></div>
+          <div class="stat"><div class="k">Loss – refunded, not put back (this month)</div><div class="v" style="color:var(--${lossMonth ? 'bad' : 'ok'})">${money(lossMonth)}</div><div class="s">today ${fmt(lossToday)}</div></div>
           <div class="stat"><div class="k">Average bill (today)</div><div class="v">${money(todayOrders.length ? sum(todayOrders) / todayOrders.length : 0)}</div></div>
           <div class="stat"><div class="k">Pending in kitchen</div><div class="v">${orders.filter(o => o.status === 'pending').length}</div></div>
         </div>
