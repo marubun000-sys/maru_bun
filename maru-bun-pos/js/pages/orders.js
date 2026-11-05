@@ -47,7 +47,7 @@ export async function render(root) {
   function filtered() {
     const q = search.toLowerCase();
     return view.filter(o => (!ftype || o.order_type === ftype) && (!fpay || o.payment_method === fpay) &&
-      (!q || billNo(o.bill_no).toLowerCase().includes(q) || String(o.bill_no) === q || (o.token_no && String(o.token_no) === q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_phone || '').includes(q)));
+      (!q || billNo(o.bill_no).toLowerCase().includes(q) || String(o.bill_no) === q || (o.token_no && String(o.token_no) === q) || (o.qr_code && o.qr_code.toLowerCase() === q) || (o.customer_name || '').toLowerCase().includes(q) || (o.customer_phone || '').includes(q)));
   }
 
   function draw() {
@@ -76,7 +76,7 @@ export async function render(root) {
     } else $('#daily').innerHTML = '';
 
     $('#rows').innerHTML = list.length ? list.map(o => `<tr class="click" data-id="${o.id}">
-      <td>${o.token_no ? '<b>#' + o.token_no + '</b>' : '—'}</td><td><b>${billNo(o.bill_no)}</b></td><td>${dtstr(o.created_at)}</td>
+      <td>${o.token_no ? '<b>#' + o.token_no + '</b>' : '—'}${o.qr_code ? `<div class="muted small" data-noi18n>QR ${esc(o.qr_code)}</div>` : ''}</td><td><b>${billNo(o.bill_no)}</b></td><td>${dtstr(o.created_at)}</td>
       <td>${esc(o.customer_name || '—')}${o.customer_phone ? `<div class="muted small">${esc(o.customer_phone)}</div>` : ''}</td>
       <td><span class="pill ${o.order_type === 'takeaway' ? 'info' : ''}">${typeLabel(o.order_type)}</span></td>
       <td>${payLabel(o.payment_method)}</td>

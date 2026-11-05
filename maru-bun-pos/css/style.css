@@ -296,3 +296,31 @@ button.pill{cursor:pointer;font-family:inherit}
 .cal-g button.has{background:rgba(255,90,90,.22);color:var(--bad);font-weight:700}
 .cal-g button.sel{outline:2px solid var(--gold)}
 .cal-dot{display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(255,90,90,.45);vertical-align:middle}
+
+/* ---------- QR ordering (customer page: order.html) ---------- */
+.qo-body{min-height:100vh;background:radial-gradient(900px 400px at 50% -10%,rgba(255,184,28,.14),transparent),var(--bg)}
+.qo{max-width:560px;margin:0 auto;padding:14px 14px 20px}
+.qo-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.qo-head img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid var(--gold)}
+.qo-title{flex:1;min-width:0;display:flex;flex-direction:column}
+.qo-title b{font-size:18px;font-weight:700}
+.qo-title span{color:var(--muted);font-size:12px}
+.qo-me{font-size:13px;color:var(--muted);margin:2px 0 8px}
+.qo-me a{color:var(--gold)}
+.qo-closed{background:rgba(255,90,90,.12);border:1px solid rgba(255,90,90,.4);color:var(--bad);border-radius:12px;padding:12px;margin:8px 0;text-align:center}
+.qo-list{display:flex;flex-direction:column;gap:8px}
+.qo-item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+.qo-item.out{opacity:.55}
+.qo-info{flex:1;min-width:0}
+.qo-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));width:min(532px,calc(100% - 28px));display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--gold);color:#1a1200;border:0;border-radius:14px;padding:14px 16px;font:inherit;font-size:15px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.45);z-index:40}
+.qo-orders{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.qo-order{background:var(--panel);border:1px solid var(--gold);border-radius:14px;padding:12px}
+.qo-code{font-weight:700;font-size:20px;color:var(--gold);letter-spacing:1px}
+.qo-code.big{font-size:44px;margin:4px 0 8px}
+.qo-big{font-size:40px}
+.qo-line{padding:8px 0;border-bottom:1px solid var(--line)}
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.qcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.qcard.new{border-color:var(--gold);box-shadow:0 0 0 1px rgba(255,184,28,.25)}
+.qcard.done{opacity:.85}
+.qlines>div{padding:2px 0}

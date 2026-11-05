@@ -87,7 +87,17 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Stock bought (this month)': 'තොග මිලදී ගැනීම (මෙම මාසය)', 'Loss – refunded, not put back (this month)': 'පාඩුව – ආපසු දුන්, තොගයට නොදැමූ (මෙම මාසය)', 'Forgot password?': 'මුරපදය අමතකද?', 'Forgot password': 'මුරපදය අමතකයි', 'Send reset link': 'යළි සැකසීමේ සබැඳිය යවන්න', 'Back to sign in': 'පිවිසුමට ආපසු', 'Check your email': 'ඔබේ ඊමේල් බලන්න',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Hi': 'ආයුබෝවන්', 'QR Ordering': 'QR ඇණවුම්', 'QR ordering': 'QR ඇණවුම්', 'Accepting QR orders': 'QR ඇණවුම් භාර ගනිමින්', 'Show QR code': 'QR කේතය පෙන්වන්න', 'Hide QR code': 'QR කේතය සඟවන්න', 'Print QR poster': 'QR පෝස්ටරය මුද්‍රණය කරන්න', 'Copy link': 'සබැඳිය පිටපත් කරන්න',
+  'New orders': 'අලුත් ඇණවුම්', 'No new QR orders': 'අලුත් QR ඇණවුම් නැත', 'Confirm → kitchen': 'තහවුරු කරන්න → මුළුතැන්ගෙයට', 'Reject': 'ප්‍රතික්ෂේප කරන්න', 'Confirmed – waiting for the customer': 'තහවුරු කළා – ගනුදෙනුකරු එනතුරු',
+  'Collect & make bill': 'භාර දී බිල හදන්න', 'Customer did not come': 'ගනුදෙනුකරු ආවේ නැත', 'Nothing waiting': 'බලා සිටින ඒවා නැත', 'Completed today': 'අද අවසන් කළ', 'Nothing completed yet today': 'අද තවම අවසන් කළ ඒවා නැත', 'View bill': 'බිල බලන්න',
+  'Kitchen: ready': 'මුළුතැන්ගෙය: සූදානම්', 'In kitchen': 'මුළුතැන්ගෙයේ', 'Save & show bill': 'සුරකින්න & බිල පෙන්වන්න',
+  'Order here': 'මෙතැනින් ඇණවුම් කරන්න', 'Log in / Register': 'පිවිසෙන්න / ලියාපදිංචි වන්න', 'Log out': 'ඉවත් වන්න', 'Register': 'ලියාපදිංචි වන්න', 'Log in': 'පිවිසෙන්න', 'Register to order': 'ඇණවුම් කිරීමට ලියාපදිංචි වන්න',
+  'Your name': 'ඔබේ නම', 'Phone number': 'දුරකථන අංකය', 'PIN (4–6 digits)': 'PIN (ඉලක්කම් 4–6)', 'Register & continue': 'ලියාපදිංචි වී ඉදිරියට', 'Log in & continue': 'පිවිසී ඉදිරියට',
+  'Your order': 'ඔබේ ඇණවුම', 'Place order': 'ඇණවුම යවන්න', 'Back to menu': 'මෙනුවට ආපසු', 'Takeaway': 'රැගෙන යාම', 'Dine-in': 'ස්ථානයේ', 'Table number (optional)': 'මේස අංකය (අවශ්‍ය නම්)', 'Note for the kitchen (optional)': 'මුළුතැන්ගෙයට සටහනක් (අවශ්‍ය නම්)',
+  'Order sent!': 'ඇණවුම යැවුණා!', 'Your order code': 'ඔබේ ඇණවුම් කේතය', 'Cancel order': 'ඇණවුම අවලංගු කරන්න', 'Finished': 'අවසන්', 'Add to order': 'ඇණවුමට එක් කරන්න', 'How many?': 'කීයක්ද?', 'Extras': 'අමතර',
+  '⏳ Waiting for the shop to confirm': '⏳ කඩය තහවුරු කරන තෙක් රැඳී සිටිනවා', '👨‍🍳 Confirmed – being prepared': '👨‍🍳 තහවුරු කළා – සකස් වෙමින්', '✅ Ready! Please come to the counter': '✅ සූදානම්! කරුණාකර කවුන්ටරයට එන්න', '🧾 Completed': '🧾 අවසන්',
+  'Show this code at the counter when you collect.': 'රැගෙන යද්දී මෙම කේතය කවුන්ටරයේදී පෙන්වන්න.', 'Prices are in LKR. The final bill is made at the counter.': 'මිල රුපියල් වලින්. අවසාන බිල කවුන්ටරයේදී හදනවා.',
+  'Sorry, we are not taking QR orders right now. Please order at the counter.': 'කණගාටුයි, දැන් QR ඇණවුම් භාර ගන්නේ නැහැ. කරුණාකර කවුන්ටරයෙන් ඇණවුම් කරන්න.',  'Stock bought (this month)': 'තොග මිලදී ගැනීම (මෙම මාසය)', 'Loss – refunded, not put back (this month)': 'පාඩුව – ආපසු දුන්, තොගයට නොදැමූ (මෙම මාසය)', 'Forgot password?': 'මුරපදය අමතකද?', 'Forgot password': 'මුරපදය අමතකයි', 'Send reset link': 'යළි සැකසීමේ සබැඳිය යවන්න', 'Back to sign in': 'පිවිසුමට ආපසු', 'Check your email': 'ඔබේ ඊමේල් බලන්න',
   'Reset password': 'මුරපදය යළි සකසන්න', 'Choose a new password': 'නව මුරපදයක් තෝරන්න', 'New password': 'නව මුරපදය', 'Repeat': 'නැවත', 'Save new password': 'නව මුරපදය සුරකින්න', 'Verify': 'තහවුරු කරන්න',
   'Enter the 6-digit code from your authenticator app': 'ඔබේ authenticator යෙදුමේ ඉලක්කම් 6 කේතය ඇතුළත් කරන්න', 'Password changed – sign in with the new password': 'මුරපදය වෙනස් කළා – නව මුරපදයෙන් පිවිසෙන්න',
   'Security alert': 'ආරක්ෂක අනතුරු ඇඟවීම', 'OK, I know': 'හරි, දනිමි', 'Confirm': 'තහවුරු කරන්න',  "Today's profit": 'අද ලාභය', "This month's profit": 'මෙම මාසයේ ලාභය', 'Add stock': 'තොගය එක් කරන්න', '± Use / waste': '± භාවිතය / නාස්තිය', 'Cost per unit': 'ඒකකයක පිරිවැය', 'Stock value': 'තොගයේ වටිනාකම', 'not set': 'සකසා නැත',
@@ -132,6 +142,9 @@ const PATTERNS = [
   [/^(\d+) bills · avg (.*)$/, 'බිල්පත් $1 · සාමාන්‍ය $2'],
   [/^(\d+) bills · average per bill (.*)$/, 'බිල්පත් $1 · බිල්පතක සාමාන්‍යය $2'],
   [/^profit (.*)$/, 'ලාභය $1'],
+  [/^Only (\d+) left$/, 'ඉතිරි $1 යි'],
+  [/^(\d+) items? · View order$/, 'අයිතම $1 · ඇණවුම බලන්න'],
+  [/^Hi (.*)$/, 'ආයුබෝවන් $1'],
   [/^today (.*)$/, 'අද $1'],
   [/^(\d+)% of sales · (\d+) old bills? estimated$/, 'විකුණුම් වලින් $1% · පරණ බිල්පත් $2ක් ඇස්තමේන්තුවෙන්'],
   [/^(\d+)% of sales · (\d+) old bills? not counted$/, 'විකුණුම් වලින් $1% · පරණ බිල්පත් $2ක් ගණන් ගන්නේ නැත'],

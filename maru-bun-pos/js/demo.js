@@ -99,6 +99,77 @@ class Q {
 
 const readAuth = () => { try { return JSON.parse(localStorage.getItem(AUTH)); } catch { return null; } };
 
+// ---- QR ordering functions (same rules as sql/update-10.sql) ----
+function qrRpc(name, a) {
+  const d = load(); d.qr_customers = d.qr_customers || []; d.qr_orders = d.qr_orders || [];
+  const err = m => ({ data: null, error: { message: m } }), ok = x => ({ data: x, error: null });
+  const ph = p => { const x = String(p || '').replace(/\D/g, ''); return /^0\d{9}$/.test(x) ? '94' + x.slice(1) : x; };
+  const byTok = t => d.qr_customers.find(c => c.token === t);
+  const today = () => new Date(Date.now() + 19800000).toISOString().slice(0, 10);
+  if (name === 'qr_menu') {
+    const st = (d.settings && d.settings[0]) || {};
+    return ok({ open: st.qr_open !== false, shop: { name: st.shop_name || 'මරු Bun', tagline: st.tagline || '', phone: st.phone || '' },
+      categories: [...d.categories].sort((x, y) => x.sort - y.sort).map(c => ({ id: c.id, name: c.name })),
+      items: d.items.filter(i => i.active).map(i => ({ id: i.id, category_id: i.category_id, name: i.name, price: i.price, allow_addons: i.allow_addons, track_stock: i.track_stock, stock: Math.max(i.stock, 0) })),
+      addons: d.addons.filter(x => x.active).map(x => ({ id: x.id, name: x.name, price: x.price })) });
+  }
+  if (name === 'qr_register') {
+    const p = ph(a.p_phone), nm = String(a.p_name || '').trim();
+    if (!nm) return err('Please enter your name'); if (!/^\d{9,15}$/.test(p)) return err('Please enter a valid phone number');
+    if (!/^\d{4,6}$/.test(a.p_pin || '')) return err('PIN must be 4 to 6 digits');
+    if (d.qr_customers.some(c => c.phone === p)) return err('This number is already registered - please log in');
+    const c = { id: uid(), name: nm, phone: p, pin: a.p_pin, token: uid() + uid(), fails: 0, locked_until: 0 }; d.qr_customers.push(c); save(d);
+    return ok({ token: c.token, name: c.name, phone: c.phone });
+  }
+  if (name === 'qr_login') {
+    const c = d.qr_customers.find(x => x.phone === ph(a.p_phone));
+    if (!c) return ok({ error: 'Wrong phone number or PIN' });
+    if (c.locked_until > Date.now()) return ok({ error: 'Too many wrong tries. Please try again in a few minutes' });
+    if (c.pin !== a.p_pin) { c.fails++; if (c.fails >= 5) { c.fails = 0; c.locked_until = Date.now() + 900000; } save(d); return ok({ error: 'Wrong phone number or PIN' }); }
+    c.fails = 0; save(d); return ok({ token: c.token, name: c.name, phone: c.phone });
+  }
+  if (name === 'qr_me') { const c = byTok(a.p_token); return ok(c ? { name: c.name, phone: c.phone } : null); }
+  if (name === 'qr_place_order') {
+    const c = byTok(a.p_token); if (!c) return err('Please log in again');
+    const st = (d.settings && d.settings[0]) || {}; if (st.qr_open === false) return err('Sorry, we are not taking QR orders right now');
+    if (!['dine_in', 'takeaway'].includes(a.p_type)) return err('Choose dine-in or takeaway');
+    const L = a.p_lines; if (!Array.isArray(L) || !L.length || L.length > 30) return err('Your order is empty');
+    if (d.qr_orders.filter(o => o.customer_id === c.id && ['new', 'confirmed'].includes(o.status)).length >= 3) return err('You already have 3 orders waiting. Please wait for them to finish');
+    const want = {}; L.forEach(l => { want[l.item_id] = (want[l.item_id] || 0) + l.qty; });
+    for (const [id, q] of Object.entries(want)) {
+      const it = d.items.find(x => x.id === id && x.active); if (!it) return err('One of the items is not available any more');
+      if (it.track_stock && it.stock < q) return err(it.stock <= 0 ? `Sorry, ${it.name} is finished` : `Sorry, only ${it.stock} left of ${it.name}`);
+    }
+    let sub = 0; const out = [];
+    for (const l of L) {
+      if (!(l.qty >= 1 && l.qty <= 50)) return err('Invalid quantity');
+      const it = d.items.find(x => x.id === l.item_id); let lt = it.price * l.qty; const ads = [];
+      for (const x of (l.addons || [])) {
+        const ad = d.addons.find(y => y.id === x.id && y.active); if (!ad) return err('One of the extras is not available any more');
+        ads.push({ id: ad.id, name: ad.name, price: ad.price, qty: x.qty }); lt += ad.price * x.qty;
+      }
+      out.push({ item_id: it.id, name: it.name, unit: it.price, qty: l.qty, addons: ads }); sub += lt;
+    }
+    const day = today(), n = d.qr_orders.filter(o => o.day === day).reduce((m, o) => Math.max(m, +o.code.slice(1)), 0) + 1;
+    const o = { id: uid(), code: 'Q' + n, day, customer_id: c.id, customer_name: c.name, customer_phone: c.phone, order_type: a.p_type, table_no: String(a.p_table || '').slice(0, 20), note: String(a.p_note || '').slice(0, 200),
+      items: out, subtotal: Math.round(sub * 100) / 100, status: 'new', order_id: null, reason: '', created_at: iso(), confirmed_at: null, done_at: null };
+    d.qr_orders.push(o); save(d); emit({ eventType: 'INSERT', table: 'qr_orders', new: { ...o }, old: {} });
+    return ok({ id: o.id, code: o.code, total: o.subtotal, status: o.status });
+  }
+  if (name === 'qr_my_orders') {
+    const c = byTok(a.p_token); if (!c) return ok([]);
+    return ok(d.qr_orders.filter(o => o.customer_id === c.id).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 10)
+      .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
+        ready: !!(o.order_id && (d.orders.find(x => x.id === o.order_id) || {}).status === 'served') })));
+  }
+  if (name === 'qr_cancel') {
+    const c = byTok(a.p_token), o = d.qr_orders.find(x => x.id === a.p_id);
+    if (c && o && o.customer_id === c.id && o.status === 'new') { o.status = 'cancelled'; save(d); emit({ eventType: 'UPDATE', table: 'qr_orders', new: { ...o }, old: {} }); return ok(true); }
+    return ok(false);
+  }
+  return ok(null);
+}
+
 export function createDemo() {
   const aal = () => sessionStorage.getItem('mb_aal') || 'aal1';
   const qr = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="white"/><text x="80" y="70" text-anchor="middle" font-size="14" font-family="sans-serif">DEMO QR</text><text x="80" y="95" text-anchor="middle" font-size="12" font-family="sans-serif">code: 123456</text></svg>');
@@ -110,6 +181,7 @@ export function createDemo() {
         const d = load(); const r = d.items.find(x => x.id === a.p_item);
         if (r && r.track_stock) { r.stock += a.p_delta; save(d); }
       }
+      if (name.startsWith('qr_')) return qrRpc(name, a);
       if (name === 'add_stock') {
         const d = load(); const r = d.inventory.find(x => x.id === a.p_id);
         if (!r) return { data: null, error: { message: 'Ingredient not found' } };

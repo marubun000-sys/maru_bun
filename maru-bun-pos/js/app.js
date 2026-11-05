@@ -10,6 +10,7 @@ import * as orders from './pages/orders.js';
 import * as customers from './pages/customers.js';
 import * as dashboard from './pages/dashboard.js';
 import * as kitchen from './pages/kitchen.js';
+import * as qr from './pages/qr.js';
 import * as menu from './pages/menu.js';
 import * as inventory from './pages/inventory.js';
 import * as review from './pages/review.js';
@@ -21,6 +22,7 @@ const PAGES = [
   { id: 'customers', label: 'Customers', icon: 'users', mod: customers },
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', mod: dashboard },
   { id: 'kitchen', label: 'Kitchen Display', icon: 'kitchen', mod: kitchen },
+  { id: 'qr', label: 'QR Ordering', icon: 'qr', mod: qr },
   { id: 'menu', label: 'Menu Management', icon: 'menu', mod: menu },
   { id: 'inventory', label: 'Inventory', icon: 'inventory', mod: inventory },
   { id: 'review', label: 'Google Review', icon: 'star', mod: review },
@@ -273,7 +275,7 @@ function startApp() {
   app.innerHTML = `<div class="shell">
     <aside class="side">
       <div class="brand"><img src="assets/logo.jpg" alt=""><div><b id="brandName"></b><span>POS System</span></div></div>
-      <nav class="nav">${PAGES.map(p => `<a data-p="${p.id}" href="#/${p.id}">${ico(p.icon)}<span>${p.label}</span>${p.id === 'kitchen' ? '<em class="badge" id="kBadge" hidden>0</em>' : ''}</a>`).join('')}</nav>
+      <nav class="nav">${PAGES.map(p => `<a data-p="${p.id}" href="#/${p.id}">${ico(p.icon)}<span>${p.label}</span>${p.id === 'kitchen' ? '<em class="badge" id="kBadge" hidden>0</em>' : p.id === 'qr' ? '<em class="badge" id="qBadge" hidden>0</em>' : ''}</a>`).join('')}</nav>
       <div class="side-foot">${esc(state.user.email || '')}<br><a href="#" id="logout" style="color:var(--gold)">Sign out</a></div>
     </aside>
     <main class="main">
@@ -406,6 +408,23 @@ async function poll() {
     if (seen.size !== before) window.dispatchEvent(new Event('orders-changed'));
   } catch { /* offline - try again next tick */ }
 }
+// ---- QR orders from customers: badge + sound when a new one arrives ----
+let qrSeen = null;
+async function checkQr() {
+  if (!state.user || SCREEN || role() === 'kitchen') return;
+  try {
+    const { data, error } = await sb.from('qr_orders').select('*').eq('status', 'new').order('created_at', { ascending: true });
+    if (error || !data) return;                                  // table not there yet (sql/update-10.sql not run)
+    const b = $('#qBadge'); if (b) { b.textContent = data.length; b.hidden = !data.length; }
+    const fresh = data.filter(x => qrSeen && !qrSeen.has(x.id));
+    qrSeen = new Set(data.map(x => x.id));
+    if (fresh.length) {
+      beep('new');
+      toast(`New QR order ${fresh.map(x => x.code).join(', ')} from ${fresh[0].customer_name} – open QR Ordering`, 'info', 12000, { sticky: true, repeat: () => beep('new') });
+    }
+  } catch { /* offline */ }
+}
+window.addEventListener('data-changed', () => { clearTimeout(checkQr.t); checkQr.t = setTimeout(checkQr, 400); });
 async function refreshSettings() {
   try {
     const old = JSON.stringify(state.settings);
@@ -437,16 +456,18 @@ function startLive() {
   } catch (e) { console.warn('realtime unavailable', e); }
   try {                                                      // menu / stock / settings changed on another device
     chan2 = sb.channel('catalog-live');
-    ['items', 'categories', 'addons', 'inventory', 'settings', 'customers', 'devices'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
+    ['items', 'categories', 'addons', 'inventory', 'settings', 'customers', 'devices', 'qr_orders'].forEach(t => chan2.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => {
       window.dispatchEvent(new Event('data-changed'));
       if (t === 'settings') refreshSettings();
     }));
     chan2.subscribe();
   } catch (e) { console.warn('realtime (catalog) unavailable', e); }
   lastDay = dstr(Date.now()); clockTick();
+  qrSeen = null; checkQr();
   poll();
   timers = [
     setInterval(poll, 10000),
+    setInterval(checkQr, 10000),
     setInterval(deviceWatch, 12000),
     setInterval(clockTick, 15000),
     setInterval(() => { if (!document.hidden) { refreshSettings(); window.dispatchEvent(new Event('data-changed')); } }, 20000), // safety net if realtime is off

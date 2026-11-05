@@ -153,3 +153,13 @@ Run **sql/update-9.sql** in the Supabase SQL Editor (safe to run again).
 - Dashboard: **Stock bought (this month)** = total price of everything added with Inventory -> Add stock (today's amount underneath).
 - Dashboard: **Loss – refunded, not put back** = cost of refunded items that were not returned to stock.
 - **This month's profit** now includes bills made before costs existed: they are ESTIMATED with today's item costs (shown as "N old bills estimated", and "(est.)" next to a bill's profit). Bills made after the cost update use their own saved cost.
+
+
+## Update 14 – QR ordering
+Run **sql/update-10.sql** in the Supabase SQL Editor (safe to run again).
+- **POS -> QR Ordering** (new page): press *Show QR code*, then *Print QR poster* and stick it in the shop. The QR opens `order.html` (customer page, Sinhala / English).
+- **Customer**: sees the menu (items that are finished show "Finished", low stock shows "Only N left", and they cannot order more than what is left), registers with name + phone + PIN (logs in with phone + PIN next time), chooses Takeaway / Dine-in (+ table no.), adds extras, sends the order and gets an order code (Q1, Q2 ... restarts every day). The page shows the status live: waiting -> confirmed -> ready -> completed.
+- **Staff**: a new order beeps and shows a badge on *QR Ordering*. **Confirm -> kitchen** turns it into a normal order (bill number, token, stock and ingredients are reduced, customer saved). When the customer comes with the code: **Collect & make bill** (or type the code in the search box and press Enter) -> discount (% or LKR), service charge, payment -> Print / WhatsApp as usual. *Reject* tells the customer; *Customer did not come* opens the refund (tick "put back in stock").
+- *Accepting QR orders* switch on that page = close / open QR ordering.
+- Safety: customers can only call the small `qr_*` functions (they cannot read your tables); prices and stock are always checked on the server, not from the phone; 5 wrong PINs lock a number for 15 minutes; max 3 waiting orders per customer.
+- Orders & Billing: search by the QR code (e.g. Q7); QR orders show their code under the token.
