@@ -87,7 +87,7 @@ const SI = {
 };
 
 Object.assign(SI, {
-  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Hi': 'ආයුබෝවන්', 'QR Ordering': 'QR ඇණවුම්', 'QR ordering': 'QR ඇණවුම්', 'Accepting QR orders': 'QR ඇණවුම් භාර ගනිමින්', 'Show QR code': 'QR කේතය පෙන්වන්න', 'Hide QR code': 'QR කේතය සඟවන්න', 'Print QR poster': 'QR පෝස්ටරය මුද්‍රණය කරන්න', 'Copy link': 'සබැඳිය පිටපත් කරන්න',
+  'Refunded items': 'ආපසු දුන් අයිතම', 'Qty refunded': 'ආපසු දුන් ගණන', 'Added back': 'තොගයට එකතු කළා', 'Reason': 'හේතුව', 'Sorry, we are not taking QR orders right now. You can look at the menu, but please order at the counter.': 'QR ඇණවුම් දැනට භාර ගන්නේ නැහැ. මෙනුව බලන්න පුළුවන්, නමුත් කරුණාකර කවුන්ටරයෙන් ඇණවුම් කරන්න.', 'Your order is ready!': 'ඔබගේ ඇණවුම සූදානම්!', 'QR orders are closed right now': 'QR ඇණවුම් දැනට වසා ඇත',  'Hi': 'ආයුබෝවන්', 'QR Ordering': 'QR ඇණවුම්', 'QR ordering': 'QR ඇණවුම්', 'Accepting QR orders': 'QR ඇණවුම් භාර ගනිමින්', 'Show QR code': 'QR කේතය පෙන්වන්න', 'Hide QR code': 'QR කේතය සඟවන්න', 'Print QR poster': 'QR පෝස්ටරය මුද්‍රණය කරන්න', 'Copy link': 'සබැඳිය පිටපත් කරන්න',
   'New orders': 'අලුත් ඇණවුම්', 'No new QR orders': 'අලුත් QR ඇණවුම් නැත', 'Confirm → kitchen': 'තහවුරු කරන්න → මුළුතැන්ගෙයට', 'Reject': 'ප්‍රතික්ෂේප කරන්න', 'Confirmed – waiting for the customer': 'තහවුරු කළා – ගනුදෙනුකරු එනතුරු',
   'Collect & make bill': 'භාර දී බිල හදන්න', 'Customer did not come': 'ගනුදෙනුකරු ආවේ නැත', 'Nothing waiting': 'බලා සිටින ඒවා නැත', 'Completed today': 'අද අවසන් කළ', 'Nothing completed yet today': 'අද තවම අවසන් කළ ඒවා නැත', 'View bill': 'බිල බලන්න',
   'Kitchen: ready': 'මුළුතැන්ගෙය: සූදානම්', 'In kitchen': 'මුළුතැන්ගෙයේ', 'Save & show bill': 'සුරකින්න & බිල පෙන්වන්න',

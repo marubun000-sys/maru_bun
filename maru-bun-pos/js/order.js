@@ -1,6 +1,6 @@
 // Customer page (opened from the shop's QR code): browse the menu, register / log in with phone + PIN, send an order.
 import { sb } from './sb.js';
-import { $, esc, fmt, money, ico, modal, toast, normPhone } from './utils.js';
+import { $, esc, fmt, money, ico, modal, toast, normPhone, beep } from './utils.js';
 import { initI18n, getLang, setLang } from './i18n.js';
 
 const LS = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } }, del: k => { try { localStorage.removeItem(k); } catch { /* ignore */ } } };
@@ -31,8 +31,10 @@ async function loadOrders() {
   if (!me) { orders = []; return; }
   const { data, error } = await sb.rpc('qr_my_orders', { p_token: me.token });
   if (!error && Array.isArray(data)) orders = data;
+  checkReady();
 }
 const active = () => orders.filter(o => o.status === 'new' || o.status === 'confirmed');
+const menuOpen = () => !menu || menu.open !== false;
 const itemById = id => ((menu && menu.items) || []).find(i => i.id === id);
 const inCart = id => cart.filter(l => l.item_id === id).reduce((n, l) => n + l.qty, 0);
 const left = it => (it.track_stock ? it.stock - inCart(it.id) : Infinity);
@@ -41,13 +43,39 @@ const cartTotal = () => cart.reduce((n, l) => n + lineTotal(l), 0);
 const cartCount = () => cart.reduce((n, l) => n + l.qty, 0);
 
 // ---- screen ----
-function paintCtl() { document.querySelectorAll('[data-ctl=lang]').forEach(b => { b.textContent = getLang() === 'si' ? 'English' : 'සිංහල'; }); }
+const theme = () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+function paintCtl() {
+  document.querySelectorAll('[data-ctl=lang]').forEach(b => { b.textContent = getLang() === 'si' ? 'English' : 'සිංහල'; });
+  document.querySelectorAll('[data-ctl=theme]').forEach(b => { b.textContent = theme() === 'light' ? '🌙' : '☀️'; b.title = theme() === 'light' ? 'Dark mode' : 'Light mode'; });
+}
+function setTheme(t) {
+  document.documentElement.dataset.theme = t; LS.set('mb_theme', t);
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'light' ? '#f4f4f6' : '#0b0b0c';
+  paintCtl();
+}
 function statusOf(o) {
   if (o.status === 'new') return ['warn', '⏳ Waiting for the shop to confirm'];
   if (o.status === 'confirmed') return o.ready ? ['ok', '✅ Ready! Please come to the counter'] : ['info', '👨‍🍳 Confirmed – being prepared'];
   if (o.status === 'done') return ['ok', '🧾 Completed'];
   if (o.status === 'rejected') return ['bad', '❌ Sorry, the shop could not accept this order'];
   return ['', 'Cancelled'];
+}
+// ---- "your order is ready" alert (sound + vibration + notification + banner) ----
+let seen = null, banner = '';                                    // seen: order id -> ready flag, null until the first load
+function askNotify() { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* ignore */ } }
+function checkReady() {
+  const now = {}; orders.forEach(o => { now[o.id] = !!(o.ready && o.status === 'confirmed'); });
+  if (seen) {
+    const fresh = orders.filter(o => now[o.id] && !seen[o.id]);
+    if (fresh.length) {
+      const codes = fresh.map(o => o.code).join(', ');
+      banner = `🔔 Your order ${codes} is ready! Please come to the counter.`;
+      beep('new'); try { navigator.vibrate && navigator.vibrate([300, 150, 300, 150, 500]); } catch { /* ignore */ }
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Your order is ready!', { body: `Order ${codes} is ready. Please come to the counter.`, icon: 'assets/logo.jpg', tag: 'mb-ready' }); } catch { /* ignore */ }
+      toast(banner, 'ok', 8000);
+    }
+  }
+  seen = now;
 }
 function draw() {
   const shop = (menu && menu.shop) || {};
@@ -56,10 +84,11 @@ function draw() {
   const cats = ((menu && menu.categories) || []).filter(c => ((menu.items) || []).some(i => i.category_id === c.id));
   root.innerHTML = `<div class="qo">
     <div class="qo-head"><img src="assets/logo.jpg" alt=""><div class="qo-title"><b>${esc(shop.name || 'Order here')}</b><span>${esc(shop.tagline || '')}</span></div>
-      <span class="ctls"><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
+      <span class="ctls"><button class="ctl" data-ctl="theme" data-noi18n aria-label="Dark / light mode"></button><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
     <div class="qo-me">${me ? `Hi <b data-noi18n>${esc(me.name)}</b> <a href="#" id="qout">Log out</a>` : `<a href="#" id="qin">Log in / Register</a> to send your order`}</div>
     ${loadErr ? `<div class="err">${esc(loadErr)}<br><small>If this keeps happening, ask the shop.</small></div>` : ''}
-    ${menu && !open ? '<div class="qo-closed">Sorry, we are not taking QR orders right now. Please order at the counter.</div>' : ''}
+    ${menu && !open ? '<div class="qo-closed">Sorry, we are not taking QR orders right now. You can look at the menu, but please order at the counter.</div>' : ''}
+    ${banner && orders.some(o => o.ready && o.status === 'confirmed') ? `<div class="qo-ready" id="qready">${esc(banner)}</div>` : ''}
     ${orders.length ? `<div class="qo-orders">${orders.slice(0, active().length ? 10 : 3).map(orderCard).join('')}</div>` : ''}
     ${cats.length ? `<div class="chips"><button class="chip ${cat === 'all' ? 'on' : ''}" data-cat="all">All</button>${cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-cat="${c.id}" data-noi18n>${esc(c.name)}</button>`).join('')}</div>` : ''}
     <div class="qo-list">${items.map(itemRow).join('') || (menu ? '<div class="empty">Nothing here right now</div>' : '<div class="empty">Loading menu…</div>')}</div>
@@ -82,7 +111,7 @@ function itemRow(it) {
   const out = it.track_stock && it.stock <= 0, n = inCart(it.id), l = left(it);
   return `<div class="qo-item ${out ? 'out' : ''}"><div class="qo-info"><b data-noi18n>${esc(it.name)}</b>
       <div class="muted small">${money(it.price)}${out ? '' : it.track_stock && it.stock <= 10 ? ` · <span style="color:var(--gold)">Only ${it.stock} left</span>` : ''}</div></div>
-    ${out ? '<span class="pill bad">Finished</span>' : n ? `<div class="qty" style="margin:0"><button data-dec="${it.id}" aria-label="less">${ico('minus', 14)}</button><b>${n}</b><button data-add="${it.id}" aria-label="more" ${l <= 0 ? 'disabled' : ''}>${ico('plus', 14)}</button></div>`
+    ${out ? '<span class="pill bad">Finished</span>' : !menuOpen() ? '' : n ? `<div class="qty" style="margin:0"><button data-dec="${it.id}" aria-label="less">${ico('minus', 14)}</button><b>${n}</b><button data-add="${it.id}" aria-label="more" ${l <= 0 ? 'disabled' : ''}>${ico('plus', 14)}</button></div>`
       : `<button class="btn sm" data-add="${it.id}">${ico('plus', 14)} Add</button>`}</div>`;
 }
 
@@ -94,6 +123,7 @@ function addLine(it, qty, addons) {
 }
 function addItem(id) {
   const it = itemById(id); if (!it) return;
+  if (!menuOpen()) return toast('QR orders are closed right now', 'err');
   if (left(it) <= 0) return toast(`Only ${it.stock} left of ${it.name}`, 'err');
   if (it.allow_addons && (menu.addons || []).length) return extrasSheet(it);
   addLine(it, 1, []);
@@ -162,7 +192,7 @@ async function place() {
     if (/log in again/i.test(errText(error))) { LS.del('mb_qr_token'); me = null; draw(); }
     await loadMenu(); draw(); return false;
   }
-  cart = []; note = ''; saveCart(); await loadOrders(); draw();
+  cart = []; note = ''; saveCart(); await loadOrders(); askNotify(); draw();
   const m = modal(`<div style="text-align:center"><div class="qo-big">✅</div><h3>Order sent!</h3>
     <div class="muted">Your order code</div><div class="qo-code big" data-noi18n>${esc(data.code)}</div>
     <p>The shop will confirm it shortly. Keep this page open to see the status, and <b>show this code at the counter</b> when you collect.</p>
@@ -219,18 +249,23 @@ root.addEventListener('click', async e => {
     if (error) toast(errText(error), 'err'); await loadOrders(); draw();
   }
 });
-document.addEventListener('click', e => { const b = e.target.closest('[data-ctl=lang]'); if (b) { setLang(getLang() === 'si' ? 'en' : 'si'); paintCtl(); } });
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-ctl=lang]'); if (b) { setLang(getLang() === 'si' ? 'en' : 'si'); paintCtl(); }
+  if (e.target.closest('[data-ctl=theme]')) setTheme(theme() === 'light' ? 'dark' : 'light');
+});
 
 // keep the status + menu fresh while the page is open
 function schedule() {
   clearInterval(timer);
   timer = setInterval(async () => {
-    if (document.hidden || document.querySelector('.modal-wrap')) return;
-    const had = JSON.stringify(orders), hadM = JSON.stringify(menu && menu.items);
+    if (document.querySelector('.modal-wrap') && !document.hidden) return;
+    const had = JSON.stringify(orders), hadM = JSON.stringify(menu && [menu.open, menu.items]);
     await loadOrders(); await loadMenu();
-    if (had !== JSON.stringify(orders) || hadM !== JSON.stringify(menu && menu.items)) draw();
+    if (!document.hidden && (had !== JSON.stringify(orders) || hadM !== JSON.stringify(menu && [menu.open, menu.items]))) draw();
+    else if (document.hidden && had !== JSON.stringify(orders)) { /* alert already fired */ }
   }, 8000);
 }
+document.addEventListener('pointerdown', () => beep('unlock'), { once: true });   // lets the browser play the ready sound later
 initI18n();
 await loadMe(); await loadMenu(); await loadOrders(); draw(); schedule();
 document.addEventListener('visibilitychange', async () => { if (!document.hidden) { await loadOrders(); await loadMenu(); if (!document.querySelector('.modal-wrap')) draw(); } });

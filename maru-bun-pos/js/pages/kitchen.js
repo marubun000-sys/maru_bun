@@ -34,7 +34,7 @@ export async function render(root, opts = {}) {
   function card(o, done) {
     const m = mins(o);
     return `<div class="kcard ${done ? 'done' : m >= 10 ? 'late' : ''}" data-id="${o.id}">
-      <div class="kh"><b>${o.token_no ? `<span class="ktok">#${o.token_no}</span> ` : ''}<small class="kbill">${billNo(o.bill_no)}</small></b><span class="pill ${o.order_type === 'takeaway' ? 'info' : 'warn'}">${typeLabel(o.order_type)}${o.table_no ? ' · Table ' + esc(o.table_no) : ''}</span></div>
+      <div class="kh"><b>${o.token_no ? `<span class="ktok">#${o.token_no}</span> ` : ''}<small class="kbill">${billNo(o.bill_no)}</small>${o.source === 'qr' || o.qr_code ? ` <span class="qtag">📱 QR ${esc(o.qr_code || '')}</span>` : ''}</b><span class="pill ${o.order_type === 'takeaway' ? 'info' : 'warn'}">${typeLabel(o.order_type)}${o.table_no ? ' · Table ' + esc(o.table_no) : ''}</span></div>
       <div class="muted small">${tstr(o.created_at)}${done ? '' : ` · <b style="color:${m >= 10 ? 'var(--bad)' : 'var(--text)'}">${m} min</b> waiting`}${o.customer_name ? ' · ' + esc(o.customer_name) : ''}</div>
       ${o.cashier ? `<div class="small" style="margin-top:2px">🧑‍💼 <span class="muted">Cashier:</span> <b>${esc(o.cashier)}</b></div>` : ''}
       <ul>${(o.items || []).map(l => { const r = lineRows(l); return `<li><b>${r.qty} ×</b> ${esc(r.name)}${r.extras.length ? `<small>${r.extras.map(e => `+ ${e.qty} × ${esc(e.name)}`).join('<br>')}</small>` : ''}</li>`; }).join('')}</ul>

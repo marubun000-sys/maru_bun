@@ -155,7 +155,7 @@ export function beep(kind = 'new') {
   try {
     ac = ac || new (window.AudioContext || window.webkitAudioContext)();
     if (ac.state === 'suspended') ac.resume();
-    const seq = kind === 'new' ? [[880, 0], [1175, 0.2], [880, 0.4], [1175, 0.6]] : [[660, 0], [990, 0.18]];
+    const seq = kind === 'unlock' ? [] : kind === 'new' ? [[880, 0], [1175, 0.2], [880, 0.4], [1175, 0.6]] : [[660, 0], [990, 0.18]];
     seq.forEach(([f, t]) => {
       const o = ac.createOscillator(), g = ac.createGain(), at = ac.currentTime + t;
       o.type = 'sine'; o.frequency.value = f;

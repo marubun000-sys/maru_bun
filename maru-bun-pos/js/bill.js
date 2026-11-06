@@ -2,6 +2,7 @@ import { esc, fmt, money, billNo, dtstr, normPhone, modal, ico, toast, $, lineRo
 import { state } from './state.js';
 import { sb } from './sb.js';
 import { SOFTWARE_NAME, SOFTWARE_SITE } from './brand.js';
+const isQr = o => o && (o.source === 'qr' || !!o.qr_code);
 
 const TYPE = { dine_in: 'Dine-in', takeaway: 'Takeaway' };
 const PAY = { cash: 'Cash', card: 'Card', bank: 'Bank Transfer', qr: 'QR Pay' };
@@ -33,6 +34,7 @@ export function billHTML(o, s = state.settings) {
     </div>
     <div class="r-hr"></div>
     ${o.token_no ? `<div class="r-token">TOKEN NO: ${o.token_no}</div>` : ''}
+    ${isQr(o) ? `<div class="r-token" style="font-size:15px">QR ORDER${o.qr_code ? ' · ' + esc(o.qr_code) : ''}</div>` : ''}
     <div class="r-meta">
       ${row('Bill No', `<b>${billNo(o.bill_no)}</b>`)}
       ${row('Date', dtstr(o.created_at))}
@@ -68,6 +70,7 @@ export function kotHTML(o) {
     <div class="r-head"><div class="r-name">KITCHEN ORDER</div></div>
     <div class="r-hr bold"></div>
     ${o.token_no ? `<div class="r-token">TOKEN NO: ${o.token_no}</div>` : ''}
+    ${isQr(o) ? `<div class="r-token" style="font-size:17px">📱 QR ORDER${o.qr_code ? ' · ' + esc(o.qr_code) : ''}</div>` : ''}
     <div class="r-line r-total"><span>${billNo(o.bill_no)}</span><span>${typeLabel(o.order_type).toUpperCase()}</span></div>
     ${o.table_no ? `<div class="r-line"><span>Table</span><b>${esc(o.table_no)}</b></div>` : ''}
     ${o.customer_name ? `<div class="r-line"><span>Customer</span><span>${esc(o.customer_name)}</span></div>` : ''}
@@ -88,6 +91,7 @@ export function billText(o, s = state.settings) {
   L.push(`🧾 Bill: *${billNo(o.bill_no)}*`);
   L.push(`📅 ${dtstr(o.created_at)}`);
   if (o.token_no) L.push(`🎫 Token No: *${o.token_no}*`);
+  if (isQr(o)) L.push(`📱 QR order${o.qr_code ? ': *' + o.qr_code + '*' : ''}`);
   L.push(`🍽️ ${typeLabel(o.order_type)}${o.table_no ? ' · Table ' + o.table_no : ''}`);
   if (o.customer_name) L.push(`👤 ${o.customer_name}`);
   if (o.cashier) L.push(`🧑‍💼 Cashier: ${o.cashier}`);
@@ -140,6 +144,7 @@ export async function billImage(o, s = state.settings, { review = true } = {}) {
   add('hr');
   const pair = (l, r, b = false, big = false, indent = 0) => add('pair', { l, r, f: `${b ? 600 : 400} ${big ? 28 : 20}px ${FAM}`, h: big ? 40 : 28, indent });
   if (o.token_no) add('center', { t: 'TOKEN NO: ' + o.token_no, f: `700 34px ${FAM}`, h: 52 });
+  if (isQr(o)) add('center', { t: 'QR ORDER' + (o.qr_code ? ' · ' + o.qr_code : ''), f: `700 24px ${FAM}`, h: 36 });
   pair('Bill No', billNo(o.bill_no), true); pair('Date', dtstr(o.created_at)); pair('Type', typeLabel(o.order_type));
   if (o.table_no) pair('Table', o.table_no);
   if (o.customer_name) pair('Customer', o.customer_name);

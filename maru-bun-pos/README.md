@@ -163,3 +163,9 @@ Run **sql/update-10.sql** in the Supabase SQL Editor (safe to run again).
 - *Accepting QR orders* switch on that page = close / open QR ordering.
 - Safety: customers can only call the small `qr_*` functions (they cannot read your tables); prices and stock are always checked on the server, not from the phone; 5 wrong PINs lock a number for 15 minutes; max 3 waiting orders per customer.
 - Orders & Billing: search by the QR code (e.g. Q7); QR orders show their code under the token.
+
+## Update 15 – QR page polish
+- Customer QR page has a dark / light mode button (☀️/🌙), remembered on the phone.
+- When **Accepting QR orders** is off, customers can still look at the menu but cannot add or place orders (also blocked on the server).
+- Kitchen cards, kitchen print, customer bill, WhatsApp text and image bill show a **QR ORDER Q#** label.
+- When the kitchen marks a QR order **Served/Ready**, the customer's phone plays a sound, vibrates, shows a green banner and (if allowed) a phone notification.
