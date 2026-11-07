@@ -310,6 +310,8 @@ button.pill{cursor:pointer;font-family:inherit}
 .qo-ready{background:rgba(53,208,127,.14);border:1px solid var(--ok);color:var(--ok);border-radius:12px;padding:12px;margin:8px 0;text-align:center;font-weight:600;animation:qopulse 1.2s ease-in-out 4}
 @keyframes qopulse{50%{transform:scale(1.02)}}
 .qtag{display:inline-block;background:var(--gold);color:#1a1200;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;letter-spacing:.3px}
+.qo-install{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--gold);border-radius:12px;padding:10px 12px;margin:8px 0;font-size:13px}.qo-install span{flex:1}
+.qo-notice{position:relative;background:linear-gradient(135deg,rgba(255,184,28,.22),rgba(255,149,0,.12));border:1px solid var(--gold);border-radius:12px;padding:12px 34px 12px 14px;margin:8px 0}.qo-notice b{display:block;color:var(--gold);margin-bottom:2px}.qo-notice .qx{position:absolute;top:6px;right:8px;background:none;border:0;color:var(--muted);font-size:16px;cursor:pointer}
 .qo-closed{background:rgba(255,90,90,.12);border:1px solid rgba(255,90,90,.4);color:var(--bad);border-radius:12px;padding:12px;margin:8px 0;text-align:center}
 .qo-list{display:flex;flex-direction:column;gap:8px}
 .qo-item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}

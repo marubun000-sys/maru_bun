@@ -2,9 +2,11 @@
 import { sb } from './sb.js';
 import { $, esc, fmt, money, ico, modal, toast, normPhone, beep } from './utils.js';
 import { initI18n, getLang, setLang } from './i18n.js';
+import { VAPID_PUBLIC } from './pushkey.js';
 
 const LS = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } }, del: k => { try { localStorage.removeItem(k); } catch { /* ignore */ } } };
 const root = $('#app');
+let notices = [], noticeSeen = null, pushOn = false, installEv = null;
 let menu = null, me = null, cart = [], cat = 'all', orders = [], type = LS.get('mb_qr_type') === 'dine_in' ? 'dine_in' : 'takeaway', table = '', note = '', timer = null, loadErr = '';
 try { cart = JSON.parse(LS.get('mb_qr_cart') || '[]'); } catch { cart = []; }
 const saveCart = () => LS.set('mb_qr_cart', JSON.stringify(cart));
@@ -27,6 +29,16 @@ async function loadMe() {
   if (!error && data) me = { token: tok, name: data.name, phone: data.phone };
   else if (!error) { LS.del('mb_qr_token'); }                      // token is not valid any more (not a network problem)
 }
+async function loadNotices() {
+  if (!me) { notices = []; return; }
+  const { data, error } = await sb.rpc('qr_notices', { p_token: me.token });
+  if (error || !Array.isArray(data)) return;
+  notices = data;
+  const ids = new Set(data.map(n => n.id));
+  if (noticeSeen && data.some(n => !noticeSeen.has(n.id) && !dismissed().includes(n.id))) beep('new');   // a new offer arrived while the page is open
+  noticeSeen = ids;
+}
+const dismissed = () => { try { return JSON.parse(LS.get('mb_qr_dis') || '[]'); } catch { return []; } };
 async function loadOrders() {
   if (!me) { orders = []; return; }
   const { data, error } = await sb.rpc('qr_my_orders', { p_token: me.token });
@@ -62,7 +74,6 @@ function statusOf(o) {
 }
 // ---- "your order is ready" alert (sound + vibration + notification + banner) ----
 let seen = null, banner = '';                                    // seen: order id -> ready flag, null until the first load
-function askNotify() { try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* ignore */ } }
 function checkReady() {
   const now = {}; orders.forEach(o => { now[o.id] = !!(o.ready && o.status === 'confirmed'); });
   if (seen) {
@@ -77,6 +88,57 @@ function checkReady() {
   }
   seen = now;
 }
+// ---- install as an app ----
+const standalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const canInstall = () => !standalone() && (!!installEv || isIOS());
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; if (menu) draw(); });
+window.addEventListener('appinstalled', () => { installEv = null; toast('App installed ✓'); if (menu) draw(); });
+async function installApp() {
+  if (installEv) { installEv.prompt(); try { await installEv.userChoice; } catch { /* ignore */ } installEv = null; return draw(); }
+  const m = modal(`<h3>📲 Install this app</h3><p>On iPhone / iPad (Safari):</p><ol style="padding-left:20px;line-height:1.7"><li>Tap the <b>Share</b> button (square with an arrow)</li><li>Tap <b>Add to Home Screen</b></li><li>Tap <b>Add</b></li></ol>
+    <p class="muted small">Then open the app from your home screen. Notifications on iPhone only work from the home-screen app.</p><button class="btn big" id="k">OK</button>`);
+  $('#k', m.el).onclick = () => m.close();
+}
+
+// ---- phone notifications (work even when the page is closed) ----
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!VAPID_PUBLIC;
+const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+async function syncPush(ask) {
+  if (!pushSupported() || !me) return false;
+  try {
+    if (Notification.permission === 'default' && ask) await Notification.requestPermission();
+    if (Notification.permission !== 'granted') { pushOn = false; return false; }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID_PUBLIC) });
+    const j = sub.toJSON();
+    const { data } = await sb.rpc('qr_push_save', { p_token: me.token, p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+    pushOn = !!data; return pushOn;
+  } catch (e) { console.warn('push', e); pushOn = false; return false; }
+}
+async function dropPush() {
+  try { if (!pushSupported() || !me) return; const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sb.rpc('qr_push_remove', { p_token: me.token, p_endpoint: sub.endpoint }); } catch { /* ignore */ }
+  pushOn = false;
+}
+const pushBlocked = () => 'Notification' in window && Notification.permission === 'denied';
+
+// ---- order history ----
+const when = iso => { const d = new Date(iso); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
+async function historySheet() {
+  const m = modal(`<h3>🕘 My order history</h3><div id="hl" class="muted">Loading…</div><div class="row end" style="margin-top:10px"><button class="btn ghost" id="k">Close</button></div>`);
+  $('#k', m.el).onclick = () => m.close();
+  const { data, error } = await sb.rpc('qr_history', { p_token: me.token });
+  const box = $('#hl', m.el); if (!box) return;
+  if (error || !Array.isArray(data)) { box.innerHTML = `<div class="err">${esc(error ? errText(error) : 'Could not load')}</div>`; return; }
+  box.className = '';
+  box.innerHTML = data.length ? data.map(o => { const [cls, txt] = statusOf({ ...o, ready: false });
+    return `<div class="qo-order"><div class="row"><span class="qo-code" data-noi18n>${esc(o.code)}</span><div class="spacer"></div><span class="pill ${cls}">${txt}</span></div>
+      <div class="muted small" style="margin-top:4px" data-noi18n>${when(o.created_at)}</div>
+      <div class="small" style="margin-top:4px" data-noi18n>${(o.items || []).map(l => `${l.qty} × ${esc(l.name)}`).join(', ')}</div>
+      <div class="row small" style="margin-top:4px"><span>${o.order_type === 'dine_in' ? 'Dine-in' : 'Takeaway'}${o.table_no ? ' · Table ' + esc(o.table_no) : ''}</span><div class="spacer"></div><b>${money(o.total != null ? o.total : o.subtotal)}</b></div></div>`; }).join('') : '<div class="empty">No orders yet</div>';
+}
+
 function draw() {
   const shop = (menu && menu.shop) || {};
   const open = !menu || menu.open !== false;
@@ -84,8 +146,10 @@ function draw() {
   const cats = ((menu && menu.categories) || []).filter(c => ((menu.items) || []).some(i => i.category_id === c.id));
   root.innerHTML = `<div class="qo">
     <div class="qo-head"><img src="assets/logo.jpg" alt=""><div class="qo-title"><b>${esc(shop.name || 'Order here')}</b><span>${esc(shop.tagline || '')}</span></div>
-      <span class="ctls"><button class="ctl" data-ctl="theme" data-noi18n aria-label="Dark / light mode"></button><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
-    <div class="qo-me">${me ? `Hi <b data-noi18n>${esc(me.name)}</b> <a href="#" id="qout">Log out</a>` : `<a href="#" id="qin">Log in / Register</a> to send your order`}</div>
+      <span class="ctls">${canInstall() ? '<button class="ctl" data-ctl="install" data-noi18n>📲 Install</button>' : ''}<button class="ctl" data-ctl="theme" data-noi18n aria-label="Dark / light mode"></button><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
+    <div class="qo-me">${me ? `Hi <b data-noi18n>${esc(me.name)}</b> · <a href="#" id="qhist">🕘 My orders</a> · ${pushSupported() && !pushOn ? (pushBlocked() ? '<span class="muted small">🔕 Notifications blocked in browser settings</span> · ' : '<a href="#" id="qnot">🔔 Turn on notifications</a> · ') : ''}<a href="#" id="qout">Log out</a>` : `<a href="#" id="qin">Log in / Register</a> to send your order`}</div>
+    ${canInstall() ? '<div class="qo-install"><span>📲 Get our app on your phone – quick ordering &amp; order alerts</span><button class="btn sm" data-ctl="install">Install</button></div>' : ''}
+    ${notices.filter(n => !dismissed().includes(n.id)).map(n => `<div class="qo-notice"><button class="qx" data-dis="${n.id}" aria-label="close">✕</button>${n.title ? `<b data-noi18n>${esc(n.title)}</b>` : ''}<div data-noi18n>${esc(n.body)}</div></div>`).join('')}
     ${loadErr ? `<div class="err">${esc(loadErr)}<br><small>If this keeps happening, ask the shop.</small></div>` : ''}
     ${menu && !open ? '<div class="qo-closed">Sorry, we are not taking QR orders right now. You can look at the menu, but please order at the counter.</div>' : ''}
     ${banner && orders.some(o => o.ready && o.status === 'confirmed') ? `<div class="qo-ready" id="qready">${esc(banner)}</div>` : ''}
@@ -192,12 +256,12 @@ async function place() {
     if (/log in again/i.test(errText(error))) { LS.del('mb_qr_token'); me = null; draw(); }
     await loadMenu(); draw(); return false;
   }
-  cart = []; note = ''; saveCart(); await loadOrders(); askNotify(); draw();
+  cart = []; note = ''; saveCart(); await loadOrders(); draw();
   const m = modal(`<div style="text-align:center"><div class="qo-big">✅</div><h3>Order sent!</h3>
     <div class="muted">Your order code</div><div class="qo-code big" data-noi18n>${esc(data.code)}</div>
-    <p>The shop will confirm it shortly. Keep this page open to see the status, and <b>show this code at the counter</b> when you collect.</p>
+    <p>The shop will confirm it shortly. <b>Show this code at the counter</b> when you collect.</p>${pushSupported() && !pushOn ? '<p class="muted small">Tap OK and choose <b>Allow</b> to get a notification when your order is ready 🔔</p>' : ''}
     <button class="btn big" id="k">OK</button></div>`);
-  $('#k', m.el).onclick = () => m.close(); schedule();
+  $('#k', m.el).onclick = async () => { m.close(); if (pushSupported() && !pushOn) { await syncPush(true); draw(); } }; schedule();
   return true;
 }
 
@@ -229,7 +293,7 @@ function authSheet(first = 'reg') {
       const msg = error ? errText(error) : data && data.error;
       if (msg) { $('#ae', m.el).innerHTML = `<div class="err">${esc(msg)}</div>`; return; }
       LS.set('mb_qr_token', data.token); me = { token: data.token, name: data.name, phone: data.phone };
-      await loadOrders(); draw(); end(true); m.close();
+      await loadOrders(); await loadNotices(); if (pushSupported() && Notification.permission === 'granted') await syncPush(false); draw(); end(true); m.close();
     };
     paint(); $('#ap', m.el).focus();
   });
@@ -237,13 +301,16 @@ function authSheet(first = 'reg') {
 
 // ---- events ----
 root.addEventListener('click', async e => {
-  const t = e.target.closest('[data-add],[data-dec],[data-cat],[data-cancel],#qcart,#qin,#qout'); if (!t) return;
+  const t = e.target.closest('[data-add],[data-dec],[data-cat],[data-cancel],[data-dis],#qcart,#qin,#qout,#qhist,#qnot'); if (!t) return;
   if (t.dataset.add) return addItem(t.dataset.add);
   if (t.dataset.dec) return decItem(t.dataset.dec);
   if (t.dataset.cat) { cat = t.dataset.cat; return draw(); }
   if (t.id === 'qcart') return cartSheet();
   if (t.id === 'qin') { e.preventDefault(); return authSheet('login'); }
-  if (t.id === 'qout') { e.preventDefault(); LS.del('mb_qr_token'); me = null; orders = []; draw(); return; }
+  if (t.id === 'qhist') { e.preventDefault(); return historySheet(); }
+  if (t.id === 'qnot') { e.preventDefault(); const ok = await syncPush(true); toast(ok ? 'Notifications are ON 🔔' : 'Notifications were not allowed', ok ? 'ok' : 'err'); return draw(); }
+  if (t.dataset.dis) { LS.set('mb_qr_dis', JSON.stringify([...dismissed(), t.dataset.dis].slice(-50))); return draw(); }
+  if (t.id === 'qout') { e.preventDefault(); await dropPush(); LS.del('mb_qr_token'); me = null; orders = []; notices = []; draw(); return; }
   if (t.dataset.cancel) {
     t.disabled = true; const { error } = await sb.rpc('qr_cancel', { p_token: me.token, p_id: t.dataset.cancel });
     if (error) toast(errText(error), 'err'); await loadOrders(); draw();
@@ -252,6 +319,7 @@ root.addEventListener('click', async e => {
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-ctl=lang]'); if (b) { setLang(getLang() === 'si' ? 'en' : 'si'); paintCtl(); }
   if (e.target.closest('[data-ctl=theme]')) setTheme(theme() === 'light' ? 'dark' : 'light');
+  if (e.target.closest('[data-ctl=install]')) installApp();
 });
 
 // keep the status + menu fresh while the page is open
@@ -259,13 +327,14 @@ function schedule() {
   clearInterval(timer);
   timer = setInterval(async () => {
     if (document.querySelector('.modal-wrap') && !document.hidden) return;
-    const had = JSON.stringify(orders), hadM = JSON.stringify(menu && [menu.open, menu.items]);
-    await loadOrders(); await loadMenu();
-    if (!document.hidden && (had !== JSON.stringify(orders) || hadM !== JSON.stringify(menu && [menu.open, menu.items]))) draw();
+    const hadN = JSON.stringify(notices), had = JSON.stringify(orders), hadM = JSON.stringify(menu && [menu.open, menu.items]);
+    await loadOrders(); await loadMenu(); await loadNotices();
+    if (!document.hidden && (hadN !== JSON.stringify(notices) || had !== JSON.stringify(orders) || hadM !== JSON.stringify(menu && [menu.open, menu.items]))) draw();
     else if (document.hidden && had !== JSON.stringify(orders)) { /* alert already fired */ }
   }, 8000);
 }
 document.addEventListener('pointerdown', () => beep('unlock'), { once: true });   // lets the browser play the ready sound later
 initI18n();
-await loadMe(); await loadMenu(); await loadOrders(); draw(); schedule();
-document.addEventListener('visibilitychange', async () => { if (!document.hidden) { await loadOrders(); await loadMenu(); if (!document.querySelector('.modal-wrap')) draw(); } });
+await loadMe(); await loadMenu(); await loadOrders(); await loadNotices(); pushOn = false; draw(); schedule();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => { if (me && pushSupported() && Notification.permission === 'granted') syncPush(false).then(draw); }).catch(() => {});
+document.addEventListener('visibilitychange', async () => { if (!document.hidden) { await loadOrders(); await loadMenu(); await loadNotices(); if (!document.querySelector('.modal-wrap')) draw(); } });

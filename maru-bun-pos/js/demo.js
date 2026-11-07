@@ -35,6 +35,7 @@ const DEFAULTS = {
   orders: d => ({ token_no: (() => { const day = x => new Date(new Date(x).getTime() + 19800000).toISOString().slice(0, 10), t = day(Date.now()); return d.orders.filter(o => day(o.created_at) === t).reduce((n, o) => Math.max(n, o.token_no || 0), 0) + 1; })(), bill_no: ++d._seq, order_type: 'dine_in', table_no: '', customer_name: '', customer_phone: '', note: '', items: [], subtotal: 0, discount: 0, discount_label: '', service_pct: 0, service_charge: 0, total: 0, payment_method: 'cash', cash_received: 0, change_given: 0, cashier: '', status: 'pending', served_at: null, refund_total: 0, refunds: [], edits: [] }),
   items: () => ({ cost: 0, cost_manual: false, recipe: [], price: 0, allow_addons: true, track_stock: true, stock: 0, low_stock: 5, active: true, category_id: null }),
   categories: () => ({ sort: 0 }),
+  qr_notices: () => ({ active: true, title: '' }),
   addons: () => ({ price: 0, cost: 0, active: true }),
   security_alerts: () => ({ seen: false }),
   inventory: () => ({ unit: 'pcs', qty: 0, low_level: 0, cost_per_unit: 0 }),
@@ -162,6 +163,17 @@ function qrRpc(name, a) {
       .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
         ready: !!(o.order_id && (d.orders.find(x => x.id === o.order_id) || {}).status === 'served') })));
   }
+  if (name === 'qr_notices') {
+    if (!byTok(a.p_token)) return ok([]);
+    return ok((d.qr_notices || []).filter(n => n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at })));
+  }
+  if (name === 'qr_history') {
+    const c = byTok(a.p_token); if (!c) return ok([]);
+    return ok(d.qr_orders.filter(o => o.customer_id === c.id).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 100)
+      .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, table_no: o.table_no, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
+        total: o.status === 'done' ? ((d.orders.find(x => x.id === o.order_id) || {}).total ?? null) : null })));
+  }
+  if (name === 'qr_push_save' || name === 'qr_push_remove') return ok(true);
   if (name === 'qr_cancel') {
     const c = byTok(a.p_token), o = d.qr_orders.find(x => x.id === a.p_id);
     if (c && o && o.customer_id === c.id && o.status === 'new') { o.status = 'cancelled'; save(d); emit({ eventType: 'UPDATE', table: 'qr_orders', new: { ...o }, old: {} }); return ok(true); }

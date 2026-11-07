@@ -2,6 +2,7 @@ import { sb } from '../sb.js';
 import { state } from '../state.js';
 import { $, esc, billNo, tstr, dayRange, toast, beep, ico, errMsg, onLive, noKitchen, lineRows } from '../utils.js';
 import { kotHTML, printHTML, typeLabel } from '../bill.js';
+import { qrPush } from '../push.js';
 
 export async function render(root, opts = {}) {
   root.innerHTML = `${opts.screen ? '' : `<div class="page-head"><h1>Kitchen Display</h1><div class="spacer"></div>
@@ -61,6 +62,7 @@ export async function render(root, opts = {}) {
     const patch = undo ? { status: 'pending', served_at: null } : { status: 'served', served_at: stamp };
     const { error } = await sb.from('orders').update(patch).eq('id', id);
     if (error) { b.disabled = false; return toast('Could not update: ' + errMsg(error), 'err'); }
+    if (!undo && (o.source === 'qr' || o.qr_code)) qrPush({ kind: 'ready', order_id: id });
     toast(undo ? `${billNo(o.bill_no)} moved back to the kitchen` : `${billNo(o.bill_no)} marked as served ✓`);
     window.dispatchEvent(new Event('orders-changed'));
     load();

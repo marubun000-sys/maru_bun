@@ -169,3 +169,11 @@ Run **sql/update-10.sql** in the Supabase SQL Editor (safe to run again).
 - When **Accepting QR orders** is off, customers can still look at the menu but cannot add or place orders (also blocked on the server).
 - Kitchen cards, kitchen print, customer bill, WhatsApp text and image bill show a **QR ORDER Q#** label.
 - When the kitchen marks a QR order **Served/Ready**, the customer's phone plays a sound, vibrates, shows a green banner and (if allowed) a phone notification.
+
+## Update 16 – install as app, order history, offers, phone notifications (even when the page is closed)
+1. Run `sql/update-11.sql` in the Supabase SQL Editor.
+2. Supabase → Edge Functions → **Deploy a new function → Via Editor**, name exactly `qr-push`, paste `supabase/functions/qr-push/index.ts`, Deploy.
+3. Supabase → Edge Functions → **Secrets**, add: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (your pair – the public one must equal `VAPID_PUBLIC` in `js/pushkey.js`) and optionally `VAPID_SUBJECT` = `mailto:your@email`.
+4. Customers: QR page → "📲 Install" (Android: one tap; iPhone: Share → Add to Home Screen). They tap "🔔 Turn on notifications" (or after sending an order).
+5. Staff: QR Ordering → **📣 Send offer / alert** shows a banner to all logged-in customers and sends a phone notification. Confirm / Reject / kitchen "Mark Served" also notify the customer's phone.
+Notes: the notification sound on a closed page is the phone's own notification sound (browsers don't allow custom sounds). iPhone needs iOS 16.4+ and the installed home-screen app.

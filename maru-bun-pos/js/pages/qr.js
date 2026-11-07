@@ -6,17 +6,19 @@ import { $, $$, esc, fmt, money, num, r2, toast, modal, ico, errMsg, onLive, con
 import { showBillModal, typeLabel, payLabel } from '../bill.js';
 import { openEdit, openRefund } from '../refund.js';
 import { qrSvg } from '../vendor/qrcode.js';
+import { qrPush } from '../push.js';
 
 export const orderUrl = () => new URL('order.html', location.href).href;
 
 export async function render(root) {
-  let rows = [], linked = {}, q = '', open = state.settings.qr_open !== false, showQr = false;
+  let rows = [], notices = [], linked = {}, q = '', open = state.settings.qr_open !== false, showQr = false;
 
   async function load() {
     const since = new Date(Date.now() - 3 * 864e5).toISOString();
     const r = await sb.from('qr_orders').select('*').gte('created_at', since).order('created_at', { ascending: true });
     if (r.error) { root.innerHTML = `<div class="err">${esc(errMsg(r.error))}<br><small>Run sql/update-10.sql in the Supabase SQL Editor first.</small></div>`; return; }
     rows = r.data || [];
+    { const nr = await sb.from('qr_notices').select('*').eq('active', true).order('created_at', { ascending: false }).limit(20); notices = nr.error ? [] : (nr.data || []).filter(n => !n.expires_at || n.expires_at > new Date().toISOString()); }
     const ids = rows.filter(x => x.order_id).map(x => x.order_id);
     linked = {};
     if (ids.length) { const o = await sb.from('orders').select('*').in('id', ids); (o.data || []).forEach(x => { linked[x.id] = x; }); }
@@ -56,6 +58,13 @@ export async function render(root) {
         ${showQr ? `<div class="row wrap" style="gap:16px;margin-top:12px;align-items:center"><div style="background:#fff;border-radius:12px;padding:6px;line-height:0">${qrSvg(url, { size: 200 })}</div>
           <div style="flex:1;min-width:220px"><div class="small">Customers open:</div><code data-noi18n style="word-break:break-all;color:var(--gold)">${esc(url)}</code>
           <div class="row wrap" style="margin-top:10px"><button class="btn" id="qprint">${ico('print', 16)} Print QR poster</button><button class="btn ghost" id="qcopy">Copy link</button></div></div></div>` : ''}</div>
+      <div class="card" style="margin-bottom:12px"><h2 style="margin:0 0 4px">📣 Send offer / alert</h2>
+        <div class="muted small" style="margin-bottom:8px">Shown to every customer who is logged in on the QR page, and sent to their phones as a notification (even if their page is closed).</div>
+        <div class="two"><label>Title<input id="nti" maxlength="60" placeholder="e.g. Today's offer"></label>
+          <label>Show for<select id="nex"><option value="today">Until end of today</option><option value="1">1 hour</option><option value="3">3 hours</option><option value="24">24 hours</option><option value="72">3 days</option><option value="0">Until I stop it</option></select></label></div>
+        <label>Message<textarea id="nbo" rows="2" maxlength="300" placeholder="e.g. Buy 2 hot buns, get 1 free until 6 PM!"></textarea></label>
+        <button class="btn" id="nsend">📣 Send now</button>
+        ${notices.length ? `<div style="margin-top:12px"><div class="muted small">Showing now:</div>${notices.map(n => `<div class="row wrap" style="gap:8px;padding:6px 0;border-top:1px solid var(--line)"><div style="flex:1;min-width:180px"><b data-noi18n>${esc(n.title || '')}</b> <span data-noi18n>${esc(n.body)}</span><div class="muted small">${tstr(n.created_at)}${n.expires_at ? ' · until ' + tstr(n.expires_at) : ''}</div></div><button class="btn ghost sm" data-stopn="${n.id}">Stop showing</button></div>`).join('')}</div>` : ''}</div>
       <div class="toolbar"><input id="qs" placeholder="Find by order code (e.g. Q7), name or phone" value="${esc(q)}" style="max-width:380px"><div class="spacer"></div>
         <span class="muted small">Press Enter on a code to collect it</span></div>
       <h3 style="margin:14px 0 8px">New orders ${news.length ? `<span class="pill bad">${news.length}</span>` : ''}</h3>
@@ -72,6 +81,17 @@ export async function render(root) {
       if (error) { open = !open; throw new Error(errMsg(error) + ' (run sql/update-10.sql)'); }
       state.settings = { ...state.settings, qr_open: open }; toast(open ? 'QR orders are ON' : 'QR orders are OFF – customers see "not taking orders"');
     });
+    $('#nsend', root).onclick = wrap(async () => {
+      const title = $('#nti', root).value.trim(), body = $('#nbo', root).value.trim(); if (!body) return toast('Type the message first', 'err');
+      const ex = $('#nex', root).value; let expires = null;
+      if (ex === 'today') expires = new Date(new Date(Date.now() + 19800000).toISOString().slice(0, 10) + 'T00:00:00+05:30').getTime() + 864e5;
+      else if (ex !== '0') expires = Date.now() + Number(ex) * 36e5;
+      const { error } = await sb.from('qr_notices').insert({ title, body, expires_at: expires ? new Date(expires).toISOString() : null });
+      if (error) throw new Error(errMsg(error) + ' (run sql/update-11.sql)');
+      const r = await qrPush({ kind: 'notice', title: title || state.settings.shop_name, body });
+      toast(r && r.sent != null ? `Offer sent · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Offer is now showing on the QR page (phone notifications are not set up yet)');
+    });
+    root.querySelectorAll('[data-stopn]').forEach(b => { b.onclick = wrap(async () => { await sb.from('qr_notices').update({ active: false }).eq('id', b.dataset.stopn); toast('Stopped'); }); });
     $('#qshow', root).onclick = () => { showQr = !showQr; draw(); };
     const pr = $('#qprint', root); if (pr) pr.onclick = () => printPoster(url);
     const cp = $('#qcopy', root); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { toast(url, 'info', 8000); } };
@@ -118,6 +138,7 @@ export async function render(root) {
     try { if (normPhone(x.customer_phone)) await sb.rpc('upsert_customer', { p_phone: normPhone(x.customer_phone), p_name: x.customer_name, p_total: subtotal }); } catch (e) { console.warn('customer not saved', e); }
     await Promise.all(Object.entries(need).map(([id, n]) => sb.rpc('adjust_stock', { p_item: id, p_delta: -n })));
     try { const ch = useDeltas(lines.map(l => ({ use: l.use, times: l.qty })), -1); if (ch.length) await sb.rpc('adjust_inventory_bulk', { p_changes: ch }); } catch (e) { console.warn('inventory not reduced', e); }
+    qrPush({ kind: 'confirmed', qr_id: x.id });
     window.dispatchEvent(new Event('orders-changed'));
     toast(`${x.code} sent to the kitchen · Token #${ins.data.token_no || ''}`.trim());
   }
@@ -179,7 +200,7 @@ export async function render(root) {
     if (b.dataset.a === 'confirm') return confirmQr(x);
     if (b.dataset.a === 'reject') {
       const why = await promptModal({ title: `Reject ${x.code}`, label: 'Reason shown to the customer (optional)', value: '', ok: 'Reject order' }); if (why === null) return;
-      const { error } = await sb.from('qr_orders').update({ status: 'rejected', reason: why.trim() }).eq('id', x.id).eq('status', 'new'); if (error) throw error; return toast('Order rejected');
+      const { error } = await sb.from('qr_orders').update({ status: 'rejected', reason: why.trim() }).eq('id', x.id).eq('status', 'new'); if (error) throw error; qrPush({ kind: 'rejected', qr_id: x.id }); return toast('Order rejected');
     }
     if (b.dataset.a === 'bill') return finish(x);
     if (b.dataset.a === 'view') { const { data } = await sb.from('orders').select('*').eq('id', x.order_id).maybeSingle(); if (data) bill(data); return; }
