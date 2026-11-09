@@ -34,6 +34,7 @@ async function loadNotices() {
   const { data, error } = await sb.rpc('qr_notices', { p_token: me.token });
   if (error || !Array.isArray(data)) return;
   notices = data;
+  { const live = new Set(data.map(n => n.id)), n0 = cart.length; cart = cart.filter(l => !l.offer_id || live.has(l.offer_id)); if (cart.length !== n0) { saveCart(); toast('An offer in your order has ended and was removed', 'err'); } }
   const ids = new Set(data.map(n => n.id));
   if (noticeSeen && data.some(n => !noticeSeen.has(n.id) && !dismissed().includes(n.id))) beep('new');   // a new offer arrived while the page is open
   noticeSeen = ids;
@@ -45,6 +46,8 @@ async function loadOrders() {
   if (!error && Array.isArray(data)) orders = data;
   checkReady();
 }
+const dayOf = t => new Date(new Date(t).getTime() + 19800000).toISOString().slice(0, 10);
+const todays = () => orders.filter(o => dayOf(o.created_at) === dayOf(Date.now()));   // the menu page shows only today's orders; older ones are in My orders
 const active = () => orders.filter(o => o.status === 'new' || o.status === 'confirmed');
 const menuOpen = () => !menu || menu.open !== false;
 const itemById = id => ((menu && menu.items) || []).find(i => i.id === id);
@@ -114,7 +117,9 @@ async function syncPush(ask) {
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID_PUBLIC) });
     const j = sub.toJSON();
     const { data } = await sb.rpc('qr_push_save', { p_token: me.token, p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
-    pushOn = !!data; return pushOn;
+    pushOn = !!data;
+    if (pushOn && ask) { try { await reg.showNotification('Notifications are ON 🔔', { body: "We'll tell you when your order is ready.", icon: 'assets/icon-192.png' }); } catch { /* ignore */ } }
+    return pushOn;
   } catch (e) { console.warn('push', e); pushOn = false; return false; }
 }
 async function dropPush() {
@@ -149,11 +154,11 @@ function draw() {
       <span class="ctls">${canInstall() ? '<button class="ctl" data-ctl="install" data-noi18n>📲 Install</button>' : ''}<button class="ctl" data-ctl="theme" data-noi18n aria-label="Dark / light mode"></button><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
     <div class="qo-me">${me ? `Hi <b data-noi18n>${esc(me.name)}</b> · <a href="#" id="qhist">🕘 My orders</a> · ${pushSupported() && !pushOn ? (pushBlocked() ? '<span class="muted small">🔕 Notifications blocked in browser settings</span> · ' : '<a href="#" id="qnot">🔔 Turn on notifications</a> · ') : ''}<a href="#" id="qout">Log out</a>` : `<a href="#" id="qin">Log in / Register</a> to send your order`}</div>
     ${canInstall() ? '<div class="qo-install"><span>📲 Get our app on your phone – quick ordering &amp; order alerts</span><button class="btn sm" data-ctl="install">Install</button></div>' : ''}
-    ${notices.filter(n => !dismissed().includes(n.id)).map(n => `<div class="qo-notice"><button class="qx" data-dis="${n.id}" aria-label="close">✕</button>${n.title ? `<b data-noi18n>${esc(n.title)}</b>` : ''}<div data-noi18n>${esc(n.body)}</div></div>`).join('')}
+    ${notices.filter(n => !dismissed().includes(n.id)).map(n => `<div class="qo-notice"><button class="qx" data-dis="${n.id}" aria-label="close">✕</button>${n.image_url ? `<img class="qo-nimg" src="${esc(n.image_url)}" alt="" data-offer="${n.id}">` : ''}${n.title ? `<b data-noi18n>${esc(n.title)}</b>` : ''}<div data-noi18n>${esc(n.body)}</div>${(n.offer_items || []).length ? `<button class="btn sm" data-offer="${n.id}" style="margin-top:8px">🎁 View offer &amp; order</button>` : ''}</div>`).join('')}
     ${loadErr ? `<div class="err">${esc(loadErr)}<br><small>If this keeps happening, ask the shop.</small></div>` : ''}
     ${menu && !open ? '<div class="qo-closed">Sorry, we are not taking QR orders right now. You can look at the menu, but please order at the counter.</div>' : ''}
     ${banner && orders.some(o => o.ready && o.status === 'confirmed') ? `<div class="qo-ready" id="qready">${esc(banner)}</div>` : ''}
-    ${orders.length ? `<div class="qo-orders">${orders.slice(0, active().length ? 10 : 3).map(orderCard).join('')}</div>` : ''}
+    ${todays().length ? `<div class="qo-orders">${todays().slice(0, 10).map(orderCard).join('')}</div>` : ''}
     ${cats.length ? `<div class="chips"><button class="chip ${cat === 'all' ? 'on' : ''}" data-cat="all">All</button>${cats.map(c => `<button class="chip ${cat === c.id ? 'on' : ''}" data-cat="${c.id}" data-noi18n>${esc(c.name)}</button>`).join('')}</div>` : ''}
     <div class="qo-list">${items.map(itemRow).join('') || (menu ? '<div class="empty">Nothing here right now</div>' : '<div class="empty">Loading menu…</div>')}</div>
     <p class="muted small" style="text-align:center;margin:14px 0 90px">Prices are in LKR. The final bill is made at the counter.</p>
@@ -179,10 +184,30 @@ function itemRow(it) {
       : `<button class="btn sm" data-add="${it.id}">${ico('plus', 14)} Add</button>`}</div>`;
 }
 
+// ---- an offer: photo, message and the items that can be ordered at the offer price ----
+function offerSheet(id) {
+  const n = notices.find(x => x.id === id); if (!n) return toast('This offer has ended', 'err');
+  const rows = (n.offer_items || []).map(oi => ({ oi, it: itemById(oi.item_id) })).filter(r => r.it);
+  const m = modal(`<h3 data-noi18n>${esc(n.title || '🎁 Offer')}</h3>${n.image_url ? `<img class="qo-nimg big" src="${esc(n.image_url)}" alt="">` : ''}<p data-noi18n>${esc(n.body)}</p>
+    <div id="ol">${rows.map(({ oi, it }) => { const out = it.track_stock && it.stock <= 0, p = oi.price != null ? Number(oi.price) : Number(it.price);
+      return `<div class="qo-item ${out ? 'out' : ''}"><div class="qo-info"><b data-noi18n>${esc(it.name)}</b><div class="small"><b style="color:var(--gold)">${money(p)}</b>${p < Number(it.price) ? ` <s class="muted">${money(it.price)}</s>` : ''}</div></div>
+        ${out ? '<span class="pill bad">Finished</span>' : `<button class="btn sm" data-oadd="${it.id}" ${menuOpen() ? '' : 'disabled'}>${ico('plus', 14)} Add</button>`}</div>`; }).join('') || '<div class="muted">This offer has no items – just a message.</div>'}</div>
+    <div class="row end" style="margin-top:12px;gap:8px"><button class="btn ghost" id="k">Close</button><button class="btn" id="vc" ${cartCount() ? '' : 'hidden'}>View my order (${cartCount()})</button></div>`);
+  $('#k', m.el).onclick = () => m.close();
+  $('#vc', m.el).onclick = () => { m.close(); cartSheet(); };
+  m.el.onclick = e => {
+    const b = e.target.closest('[data-oadd]'); if (!b) return;
+    const it = itemById(b.dataset.oadd), oi = (n.offer_items || []).find(x => x.item_id === it.id);
+    if (left(it) <= 0) return toast(`Only ${it.stock} left of ${it.name}`, 'err');
+    addLine(it, 1, [], { id: n.id, price: oi.price }); toast(`${it.name} added 🎁`);
+    const vc = $('#vc', m.el); vc.hidden = false; vc.textContent = `View my order (${cartCount()})`;
+  };
+}
 // ---- cart actions ----
-function addLine(it, qty, addons) {
-  const same = cart.find(l => l.item_id === it.id && JSON.stringify(l.addons.map(a => [a.id, a.qty])) === JSON.stringify(addons.map(a => [a.id, a.qty])));
-  if (same) same.qty += qty; else cart.push({ key: uid(), item_id: it.id, name: it.name, price: Number(it.price), qty, addons });
+function addLine(it, qty, addons, offer) {
+  const oid = offer ? offer.id : null, price = offer && offer.price != null ? Number(offer.price) : Number(it.price);
+  const same = cart.find(l => l.item_id === it.id && (l.offer_id || null) === oid && JSON.stringify(l.addons.map(a => [a.id, a.qty])) === JSON.stringify(addons.map(a => [a.id, a.qty])));
+  if (same) same.qty += qty; else cart.push({ key: uid(), item_id: it.id, name: it.name, price, qty, addons, ...(oid ? { offer_id: oid } : {}) });
   saveCart(); draw();
 }
 function addItem(id) {
@@ -221,7 +246,7 @@ function cartSheet() {
     <p class="muted small">The shop confirms your order first. Discounts, if any, are applied when the bill is made.</p>
     <div class="row end"><button class="btn ghost" id="cb">Back to menu</button><button class="btn big" id="go">Place order</button></div>`);
   const paint = () => {
-    $('#cl', m.el).innerHTML = cart.map(l => `<div class="qo-line"><div class="row"><b data-noi18n>${esc(l.name)}</b><div class="spacer"></div><span>${fmt(l.price * l.qty)}</span></div>
+    $('#cl', m.el).innerHTML = cart.map(l => `<div class="qo-line"><div class="row"><b data-noi18n>${esc(l.name)}</b>${l.offer_id ? ' <span class="pill ok">🎁 Offer</span>' : ''}<div class="spacer"></div><span>${fmt(l.price * l.qty)}</span></div>
       ${l.addons.map(a => `<div class="muted small" data-noi18n>+ ${a.qty} × ${esc(a.name)} · ${fmt(a.price * a.qty)}</div>`).join('')}
       <div class="qty" style="margin:4px 0 0"><button data-d="${l.key}">${ico('minus', 14)}</button><b>${l.qty}</b><button data-i="${l.key}">${ico('plus', 14)}</button><button class="del" data-x="${l.key}">${ico('trash', 14)}</button></div></div>`).join('') || '<div class="empty">Your order is empty</div>';
     $('#tt', m.el).textContent = money(cartTotal());
@@ -249,7 +274,7 @@ function cartSheet() {
   paint();
 }
 async function place() {
-  const lines = cart.map(l => ({ item_id: l.item_id, qty: l.qty, addons: l.addons.map(a => ({ id: a.id, qty: a.qty })) }));
+  const lines = cart.map(l => ({ item_id: l.item_id, qty: l.qty, ...(l.offer_id ? { offer_id: l.offer_id } : {}), addons: l.addons.map(a => ({ id: a.id, qty: a.qty })) }));
   const { data, error } = await sb.rpc('qr_place_order', { p_token: me.token, p_type: type, p_table: type === 'dine_in' ? table : '', p_note: note, p_lines: lines });
   if (error) {
     toast(errText(error), 'err', 6000);
@@ -301,7 +326,7 @@ function authSheet(first = 'reg') {
 
 // ---- events ----
 root.addEventListener('click', async e => {
-  const t = e.target.closest('[data-add],[data-dec],[data-cat],[data-cancel],[data-dis],#qcart,#qin,#qout,#qhist,#qnot'); if (!t) return;
+  const t = e.target.closest('[data-add],[data-dec],[data-cat],[data-cancel],[data-dis],[data-offer],#qcart,#qin,#qout,#qhist,#qnot'); if (!t) return;
   if (t.dataset.add) return addItem(t.dataset.add);
   if (t.dataset.dec) return decItem(t.dataset.dec);
   if (t.dataset.cat) { cat = t.dataset.cat; return draw(); }
@@ -309,6 +334,7 @@ root.addEventListener('click', async e => {
   if (t.id === 'qin') { e.preventDefault(); return authSheet('login'); }
   if (t.id === 'qhist') { e.preventDefault(); return historySheet(); }
   if (t.id === 'qnot') { e.preventDefault(); const ok = await syncPush(true); toast(ok ? 'Notifications are ON 🔔' : 'Notifications were not allowed', ok ? 'ok' : 'err'); return draw(); }
+  if (t.dataset.offer) return offerSheet(t.dataset.offer);
   if (t.dataset.dis) { LS.set('mb_qr_dis', JSON.stringify([...dismissed(), t.dataset.dis].slice(-50))); return draw(); }
   if (t.id === 'qout') { e.preventDefault(); await dropPush(); LS.del('mb_qr_token'); me = null; orders = []; notices = []; draw(); return; }
   if (t.dataset.cancel) {
@@ -336,5 +362,8 @@ function schedule() {
 document.addEventListener('pointerdown', () => beep('unlock'), { once: true });   // lets the browser play the ready sound later
 initI18n();
 await loadMe(); await loadMenu(); await loadOrders(); await loadNotices(); pushOn = false; draw(); schedule();
+const openFromLink = () => { const id = new URLSearchParams(location.search).get('offer'); if (id) { history.replaceState(null, '', location.pathname); if (me) offerSheet(id); } };
+openFromLink();
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'offer' && me) offerSheet(e.data.id); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => { if (me && pushSupported() && Notification.permission === 'granted') syncPush(false).then(draw); }).catch(() => {});
 document.addEventListener('visibilitychange', async () => { if (!document.hidden) { await loadOrders(); await loadMenu(); await loadNotices(); if (!document.querySelector('.modal-wrap')) draw(); } });

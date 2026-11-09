@@ -35,7 +35,7 @@ const DEFAULTS = {
   orders: d => ({ token_no: (() => { const day = x => new Date(new Date(x).getTime() + 19800000).toISOString().slice(0, 10), t = day(Date.now()); return d.orders.filter(o => day(o.created_at) === t).reduce((n, o) => Math.max(n, o.token_no || 0), 0) + 1; })(), bill_no: ++d._seq, order_type: 'dine_in', table_no: '', customer_name: '', customer_phone: '', note: '', items: [], subtotal: 0, discount: 0, discount_label: '', service_pct: 0, service_charge: 0, total: 0, payment_method: 'cash', cash_received: 0, change_given: 0, cashier: '', status: 'pending', served_at: null, refund_total: 0, refunds: [], edits: [] }),
   items: () => ({ cost: 0, cost_manual: false, recipe: [], price: 0, allow_addons: true, track_stock: true, stock: 0, low_stock: 5, active: true, category_id: null }),
   categories: () => ({ sort: 0 }),
-  qr_notices: () => ({ active: true, title: '' }),
+  qr_notices: () => ({ active: true, title: '', offer_items: [], image_url: null }),
   addons: () => ({ price: 0, cost: 0, active: true }),
   security_alerts: () => ({ seen: false }),
   inventory: () => ({ unit: 'pcs', qty: 0, low_level: 0, cost_per_unit: 0 }),
@@ -144,12 +144,18 @@ function qrRpc(name, a) {
     let sub = 0; const out = [];
     for (const l of L) {
       if (!(l.qty >= 1 && l.qty <= 50)) return err('Invalid quantity');
-      const it = d.items.find(x => x.id === l.item_id); let lt = it.price * l.qty; const ads = [];
+      const it = d.items.find(x => x.id === l.item_id); let unit = it.price; const ads = [];
+      if (l.offer_id) {
+        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso())); if (!nt) return err('Sorry, this offer has ended');
+        const oi = (nt.offer_items || []).find(x => x.item_id === it.id); if (!oi) return err('This item is not part of the offer');
+        if (oi.price != null && oi.price !== '') unit = Number(oi.price);
+      }
+      let lt = unit * l.qty;
       for (const x of (l.addons || [])) {
         const ad = d.addons.find(y => y.id === x.id && y.active); if (!ad) return err('One of the extras is not available any more');
         ads.push({ id: ad.id, name: ad.name, price: ad.price, qty: x.qty }); lt += ad.price * x.qty;
       }
-      out.push({ item_id: it.id, name: it.name, unit: it.price, qty: l.qty, addons: ads }); sub += lt;
+      out.push({ item_id: it.id, name: it.name, unit, qty: l.qty, addons: ads, offer_id: l.offer_id || null }); sub += lt;
     }
     const day = today(), n = d.qr_orders.filter(o => o.day === day).reduce((m, o) => Math.max(m, +o.code.slice(1)), 0) + 1;
     const o = { id: uid(), code: 'Q' + n, day, customer_id: c.id, customer_name: c.name, customer_phone: c.phone, order_type: a.p_type, table_no: String(a.p_table || '').slice(0, 20), note: String(a.p_note || '').slice(0, 200),
@@ -165,7 +171,7 @@ function qrRpc(name, a) {
   }
   if (name === 'qr_notices') {
     if (!byTok(a.p_token)) return ok([]);
-    return ok((d.qr_notices || []).filter(n => n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at })));
+    return ok((d.qr_notices || []).filter(n => n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, image_url: n.image_url || null, offer_items: n.offer_items || [] })));
   }
   if (name === 'qr_history') {
     const c = byTok(a.p_token); if (!c) return ok([]);

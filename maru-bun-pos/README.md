@@ -177,3 +177,10 @@ Run **sql/update-10.sql** in the Supabase SQL Editor (safe to run again).
 4. Customers: QR page → "📲 Install" (Android: one tap; iPhone: Share → Add to Home Screen). They tap "🔔 Turn on notifications" (or after sending an order).
 5. Staff: QR Ordering → **📣 Send offer / alert** shows a banner to all logged-in customers and sends a phone notification. Confirm / Reject / kitchen "Mark Served" also notify the customer's phone.
 Notes: the notification sound on a closed page is the phone's own notification sound (browsers don't allow custom sounds). iPhone needs iOS 16.4+ and the installed home-screen app.
+
+## Update 17 – orderable offers with photo, today-only orders on the menu
+1. Run `sql/update-12.sql` (after update-11).
+2. **Re-deploy the Edge Function `qr-push`** (paste the new `supabase/functions/qr-push/index.ts` → Deploy). It now sends the offer photo and opens the offer when the notification is tapped.
+3. QR Ordering → 📣 Send offer / alert: add a photo, and (optional) tick the offer items + offer prices. Customers see the offer card (tap → offer screen → Add → order). Prices are checked on the server.
+4. The QR menu page now lists only **today's** orders; older ones are in 🕘 My orders.
+5. The send box shows how many phones can get notifications; if sending fails it shows the reason.

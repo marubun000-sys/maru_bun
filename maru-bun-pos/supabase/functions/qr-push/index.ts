@@ -34,6 +34,8 @@ Deno.serve(async (req: Request) => {
   if (b.kind === 'notice') {
     subs = await rest('qr_push?select=id,endpoint,p256dh,auth&limit=2000');
     payload = { kind: 'notice', title: String(b.title || 'මරු Bun').slice(0, 80), body: String(b.body || '').slice(0, 300), tag: 'mb-notice' };
+    if (typeof b.image === 'string' && b.image.startsWith(base + '/storage/')) payload.image = b.image;
+    payload.url = uuid.test(b.offer_id || '') ? `order.html?offer=${b.offer_id}` : 'order.html';
   } else if (['confirmed', 'rejected', 'ready'].includes(b.kind)) {
     const key = b.qr_id ? `id=eq.${b.qr_id}` : `order_id=eq.${b.order_id}`;
     if (!uuid.test(b.qr_id || b.order_id || '')) return json({ error: 'Bad id' }, 400);
@@ -50,7 +52,7 @@ Deno.serve(async (req: Request) => {
 
   let sent = 0; const dead: string[] = [];
   await Promise.all(subs.map(async (s) => {
-    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ ...payload, url: 'order.html' }), { TTL: 3600 }); sent++; }
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ url: 'order.html', ...payload }), { TTL: 3600 }); sent++; }
     catch (e) { const code = (e as { statusCode?: number }).statusCode; if (code === 404 || code === 410) dead.push(s.id); }
   }));
   if (dead.length) await fetch(`${base}/rest/v1/qr_push?id=in.(${dead.join(',')})`, { method: 'DELETE', headers: { apikey: svc, Authorization: `Bearer ${svc}` } });
