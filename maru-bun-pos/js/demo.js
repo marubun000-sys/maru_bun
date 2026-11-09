@@ -136,7 +136,7 @@ function qrRpc(name, a) {
     if (!['dine_in', 'takeaway'].includes(a.p_type)) return err('Choose dine-in or takeaway');
     const L = a.p_lines; if (!Array.isArray(L) || !L.length || L.length > 30) return err('Your order is empty');
     if (d.qr_orders.filter(o => o.customer_id === c.id && ['new', 'confirmed'].includes(o.status)).length >= 3) return err('You already have 3 orders waiting. Please wait for them to finish');
-    const want = {}; L.forEach(l => { want[l.item_id] = (want[l.item_id] || 0) + l.qty; });
+    const want = {}; L.forEach(l => { if (l.item_id) want[l.item_id] = (want[l.item_id] || 0) + l.qty; });
     for (const [id, q] of Object.entries(want)) {
       const it = d.items.find(x => x.id === id && x.active); if (!it) return err('One of the items is not available any more');
       if (it.track_stock && it.stock < q) return err(it.stock <= 0 ? `Sorry, ${it.name} is finished` : `Sorry, only ${it.stock} left of ${it.name}`);
@@ -144,8 +144,12 @@ function qrRpc(name, a) {
     let sub = 0; const out = [];
     for (const l of L) {
       if (!(l.qty >= 1 && l.qty <= 50)) return err('Invalid quantity');
-      const it = d.items.find(x => x.id === l.item_id); let unit = it.price; const ads = [];
-      if (l.offer_id) {
+      let it = d.items.find(x => x.id === l.item_id), unit = it ? it.price : 0, nm = null; const ads = [];
+      if (l.custom_id) {
+        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!n.customer_ids || n.customer_ids.includes(c.id))); if (!nt) return err('Sorry, this offer has ended');
+        const oi = (nt.offer_items || []).find(x => x.id === l.custom_id); if (!oi) return err('This item is not part of the offer');
+        nm = oi.name; unit = Number(oi.price); it = oi.item_id ? d.items.find(x => x.id === oi.item_id) : null;
+      } else if (l.offer_id) {
         const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!n.customer_ids || n.customer_ids.includes(c.id))); if (!nt) return err('Sorry, this offer has ended');
         const oi = (nt.offer_items || []).find(x => x.item_id === it.id); if (!oi) return err('This item is not part of the offer');
         if (oi.price != null && oi.price !== '') unit = Number(oi.price);
@@ -155,7 +159,7 @@ function qrRpc(name, a) {
         const ad = d.addons.find(y => y.id === x.id && y.active); if (!ad) return err('One of the extras is not available any more');
         ads.push({ id: ad.id, name: ad.name, price: ad.price, qty: x.qty }); lt += ad.price * x.qty;
       }
-      out.push({ item_id: it.id, name: it.name, unit, qty: l.qty, addons: ads, offer_id: l.offer_id || null }); sub += lt;
+      out.push({ item_id: it ? it.id : null, name: nm || it.name, unit, qty: l.qty, addons: ads, offer_id: l.offer_id || null, custom_id: l.custom_id || null }); sub += lt;
     }
     const day = today(), n = d.qr_orders.filter(o => o.day === day).reduce((m, o) => Math.max(m, +o.code.slice(1)), 0) + 1;
     const o = { id: uid(), code: 'Q' + n, day, customer_id: c.id, customer_name: c.name, customer_phone: c.phone, order_type: a.p_type, table_no: String(a.p_table || '').slice(0, 20), note: String(a.p_note || '').slice(0, 200),

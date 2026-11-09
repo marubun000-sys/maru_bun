@@ -4,6 +4,7 @@ import { $, esc, fmt, dtstr, toast, ico, errMsg, onLive, downloadCSV, modal, pro
 import { newOffer, offerFormHTML, bindOfferForm, offerRow } from '../offerform.js';
 import { qrPush } from '../push.js';
 import { orderUrl } from './qr.js';
+import { normPhone } from '../utils.js';
 const MSG = newOffer();   // the personal message form keeps what you typed, even after a refresh or closing the window
 const PICK = new Set();    // chosen QR customers (ids)
 let VIA = { qr: true, wa: true };
@@ -39,18 +40,21 @@ export async function render(root) {
     <div id="err"></div>
     <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Phone</th><th class="r">Visits</th><th class="r">Total spent (LKR)</th><th>Last visit</th><th>Promos</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>`;
 
+  let qrByPhone = {};   // phone -> QR customer (people who registered on the QR menu)
   const list = () => rows.filter(r => !q || (r.name || '').toLowerCase().includes(q) || r.phone.includes(q.replace(/\D/g, '') || '\u0000'));
   function draw() {
     const l = list();
     $('#cnt', root).textContent = `${rows.length} customers`;
     $('#rows', root).innerHTML = l.length ? l.map(r => `<tr><td><b>${esc(r.name || '—')}</b></td><td>+${esc(r.phone)}</td><td class="r">${r.visits}</td><td class="r">${fmt(r.total_spent)}</td><td>${dtstr(r.last_visit)}</td>
       <td><button class="pill ${r.opt_out ? 'bad' : 'ok'}" data-a="opt" data-p="${esc(r.phone)}" title="Tap to change">${r.opt_out ? 'Stopped' : 'Receives'}</button></td>
-      <td class="r" style="white-space:nowrap"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${esc(r.phone)}">WhatsApp</a> <button class="btn ghost sm" data-a="edit" data-p="${esc(r.phone)}">${ico('edit', 14)}</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No customers yet</td></tr>';
+      <td class="r" style="white-space:nowrap"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${esc(r.phone)}">WhatsApp</a> ${qrByPhone[normPhone(r.phone)] ? `<button class="btn ghost sm" data-a="qrmsg" data-p="${esc(normPhone(r.phone))}" title="Send an offer / message to this customer's QR menu">📱 QR</button> ` : ''}<button class="btn ghost sm" data-a="edit" data-p="${esc(r.phone)}">${ico('edit', 14)}</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No customers yet</td></tr>';
   }
   async function load() {
     const { data, error } = await sb.from('customers').select('*').order('last_visit', { ascending: false });
     if (error) { $('#err', root).innerHTML = `<div class="err">${esc(errMsg(error))}<br><small>Run sql/update-3.sql in the Supabase SQL Editor first.</small></div>`; return; }
-    $('#err', root).innerHTML = ''; rows = data || []; draw();
+    $('#err', root).innerHTML = ''; rows = data || [];
+    try { const q = await sb.rpc('qr_customer_list'); qrByPhone = {}; (q.data || []).forEach(p => { qrByPhone[normPhone(p.phone)] = p; }); } catch { /* QR not set up */ }
+    draw();
   }
 
   // ---------------- send promotion ----------------
@@ -208,16 +212,19 @@ export async function render(root) {
   }
 
   // ---------------- personal message / offer to customers registered on the QR menu ----------------
-  async function openQrMessage() {
+  async function openQrMessage(onlyPhone) {
     const [cr, ir] = await Promise.all([sb.rpc('qr_customer_list'), sb.from('items').select('id,name,price').eq('active', true).order('name')]);
     if (cr.error) return toast(errMsg(cr.error) + ' (run sql/update-13.sql)', 'err', 7000);
-    const people = cr.data || [], items = ir.data || [];
+    let people = (cr.data || []).slice().sort((a, b) => (b.orders - a.orders) || (a.created_at < b.created_at ? 1 : -1)), items = ir.data || [];   // most QR orders first
+    const one = onlyPhone ? people.find(p => normPhone(p.phone) === onlyPhone) : null;
+    if (onlyPhone && !one) return toast('This customer is not registered on the QR menu', 'err');
+    if (one) { people = [one]; PICK.clear(); PICK.add(one.id); }
     if (!people.length) return toast('Nobody has registered on the QR menu yet', 'err');
     let fq = '';
-    const m = modal(`<h3>💬 Message QR customers</h3>
-      <p class="muted small" style="margin-top:-4px">Customers who registered on your QR menu. Send a personal message or offer to the ones you choose.</p>
-      <div class="row wrap" style="gap:10px;margin-bottom:6px"><input id="mq" type="search" placeholder="Search name / phone" style="max-width:240px"><label class="check" style="margin:0"><input type="checkbox" id="mall"> Select all shown</label><span class="pill info" id="mn"></span></div>
-      <div id="ml" style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px"></div>
+    const m = modal(`<h3>💬 ${one ? 'Message ' + esc(one.name) : 'Message QR customers'}</h3>
+      <p class="muted small" style="margin-top:-4px">${one ? `+${esc(one.phone)} · ${one.orders} QR order${one.orders === 1 ? '' : 's'}` : 'Customers who registered on your QR menu, the ones with the most QR orders first. Send a personal message or offer to the ones you choose.'}</p>
+      <div class="row wrap" style="gap:10px;margin-bottom:6px" ${one ? 'hidden' : ''}><input id="mq" type="search" placeholder="Search name / phone" style="max-width:240px"><label class="check" style="margin:0"><input type="checkbox" id="mall"> Select all shown</label><span class="pill info" id="mn"></span></div>
+      <div id="ml" style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px" ${one ? 'hidden' : ''}></div>
       <div style="margin-top:12px">${offerFormHTML(MSG, items, 'm')}</div>
       <div style="margin:10px 0 2px"><b>Send by</b></div>
       <label class="check"><input type="checkbox" id="vq" ${VIA.qr ? 'checked' : ''}> 📱 QR menu + phone notification <span class="muted small">(only the chosen customers see it)</span></label>
@@ -234,7 +241,7 @@ export async function render(root) {
     $('#ml', m.el).onchange = e => { const b = e.target.closest('[data-pid]'); if (!b) return; if (b.checked) PICK.add(b.dataset.pid); else PICK.delete(b.dataset.pid); $('#mn', m.el).textContent = `${PICK.size} selected`; };
     $('#vq', m.el).onchange = e => { VIA.qr = e.target.checked; }; $('#vw', m.el).onchange = e => { VIA.wa = e.target.checked; };
     const go = $('#mgo', m.el);
-    bindOfferForm(m.el, MSG, 'm', b => { go.disabled = b; });
+    bindOfferForm(m.el, MSG, 'm', b => { go.disabled = b; }, () => items);
     $('#mc', m.el).onclick = () => m.close();
     go.onclick = async () => {
       try {
@@ -276,6 +283,7 @@ export async function render(root) {
     draw();
   }
   $('#qmsg', root).onclick = () => openQrMessage().catch(e => toast(errMsg(e), 'err'));
+  root.addEventListener('click', e => { const b = e.target.closest('[data-a=qrmsg]'); if (b) openQrMessage(b.dataset.p).catch(err => toast(errMsg(err), 'err')); });
   $('#promo', root).onclick = () => { if (!rows.length) return toast('No customers saved yet', 'err'); openComposer(); };
   $('#cq', root).oninput = e => { q = e.target.value.toLowerCase().trim(); draw(); };
   $('#csv', root).onclick = () => downloadCSV('customers.csv', [['Name', 'Phone', 'Visits', 'Total spent', 'Last visit', 'Promos'], ...rows.map(r => [r.name, '+' + r.phone, r.visits, r.total_spent, r.last_visit, r.opt_out ? 'stopped' : 'receives'])]);

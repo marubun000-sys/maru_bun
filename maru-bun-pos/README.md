@@ -191,3 +191,9 @@ Notes: the notification sound on a closed page is the phone's own notification s
 3. **Customers → 💬 Message QR customers**: choose QR-registered customers, write a message / offer (photo, offer items + prices), send by QR menu + phone notification (only they see it) and/or WhatsApp (opens each chat with the message and the menu/offer link).
 4. The "Send offer / alert" form on QR Ordering no longer loses what you typed when the page refreshes, and the offer-item/price list is always visible.
 5. Menu order: POS, QR Ordering, Orders & Billing, Customers, Kitchen Display, Dashboard, Menu Management, Inventory, Google Review, Settings & Security.
+
+## Update 19 – custom offer items, per-customer QR button, best QR customers first
+1. Run `sql/update-14.sql` (after update-13). No Edge Function change this time.
+2. Offer form (QR Ordering and Customers): **✏️ Custom offer item** = your own name + price (e.g. a combo shown in the photo). Optional "stock link" lowers the stock of a chosen menu item when ordered.
+3. Customers table: customers who registered on the QR menu get a **📱 QR** button next to WhatsApp – opens a message/offer for just that customer.
+4. Message QR customers: the list shows the customers with the most QR orders first.

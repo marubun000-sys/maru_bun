@@ -20,7 +20,7 @@ async function loadMenu() {
   loadErr = ''; menu = data;
   // drop cart lines whose item vanished or sold out
   const ok = new Set((menu.items || []).map(i => i.id));
-  cart = cart.filter(l => ok.has(l.item_id)); saveCart();
+  cart = cart.filter(l => (l.custom_id && !l.item_id) || ok.has(l.item_id)); saveCart();
   return true;
 }
 async function loadMe() {
@@ -187,27 +187,31 @@ function itemRow(it) {
 // ---- an offer: photo, message and the items that can be ordered at the offer price ----
 function offerSheet(id) {
   const n = notices.find(x => x.id === id); if (!n) return toast('This offer has ended', 'err');
-  const rows = (n.offer_items || []).map(oi => ({ oi, it: itemById(oi.item_id) })).filter(r => r.it);
+  const rows = (n.offer_items || []).map(oi => (oi.name ? { oi, custom: true, key: oi.id, it: oi.item_id ? itemById(oi.item_id) : null } : { oi, custom: false, key: oi.item_id, it: itemById(oi.item_id) })).filter(r => r.custom || r.it);
   const m = modal(`<h3 data-noi18n>${esc(n.title || '🎁 Offer')}</h3>${n.image_url ? `<img class="qo-nimg big" src="${esc(n.image_url)}" alt="">` : ''}<p data-noi18n>${esc(n.body)}</p>
-    <div id="ol">${rows.map(({ oi, it }) => { const out = it.track_stock && it.stock <= 0, p = oi.price != null ? Number(oi.price) : Number(it.price);
-      return `<div class="qo-item ${out ? 'out' : ''}"><div class="qo-info"><b data-noi18n>${esc(it.name)}</b><div class="small"><b style="color:var(--gold)">${money(p)}</b>${p < Number(it.price) ? ` <s class="muted">${money(it.price)}</s>` : ''}</div></div>
-        ${out ? '<span class="pill bad">Finished</span>' : `<button class="btn sm" data-oadd="${it.id}" ${menuOpen() ? '' : 'disabled'}>${ico('plus', 14)} Add</button>`}</div>`; }).join('') || '<div class="muted">This offer has no items – just a message.</div>'}</div>
+    <div id="ol">${rows.map(({ oi, it, custom, key }) => { const out = it && it.track_stock && it.stock <= 0, p = oi.price != null ? Number(oi.price) : Number(it.price);
+      return `<div class="qo-item ${out ? 'out' : ''}"><div class="qo-info"><b data-noi18n>${esc(custom ? oi.name : it.name)}</b><div class="small"><b style="color:var(--gold)">${money(p)}</b>${!custom && p < Number(it.price) ? ` <s class="muted">${money(it.price)}</s>` : ''}</div></div>
+        ${out ? '<span class="pill bad">Finished</span>' : `<button class="btn sm" data-oadd="${esc(key)}" ${menuOpen() ? '' : 'disabled'}>${ico('plus', 14)} Add</button>`}</div>`; }).join('') || '<div class="muted">This offer has no items – just a message.</div>'}</div>
     <div class="row end" style="margin-top:12px;gap:8px"><button class="btn ghost" id="k">Close</button><button class="btn" id="vc" ${cartCount() ? '' : 'hidden'}>View my order (${cartCount()})</button></div>`);
   $('#k', m.el).onclick = () => m.close();
   $('#vc', m.el).onclick = () => { m.close(); cartSheet(); };
   m.el.onclick = e => {
     const b = e.target.closest('[data-oadd]'); if (!b) return;
-    const it = itemById(b.dataset.oadd), oi = (n.offer_items || []).find(x => x.item_id === it.id);
-    if (left(it) <= 0) return toast(`Only ${it.stock} left of ${it.name}`, 'err');
-    addLine(it, 1, [], { id: n.id, price: oi.price }); toast(`${it.name} added 🎁`);
+    const r = rows.find(x => x.key === b.dataset.oadd); if (!r) return;
+    const it = r.it, oi = r.oi, nm = r.custom ? oi.name : it.name;
+    if (it && left(it) <= 0) return toast(`Only ${Math.max(it.stock, 0)} left of ${it.name}`, 'err');
+    if (r.custom) addLine({ id: it ? it.id : null, name: oi.name, price: oi.price }, 1, [], { id: n.id, price: oi.price, custom_id: oi.id });
+    else addLine(it, 1, [], { id: n.id, price: oi.price });
+    toast(`${nm} added 🎁`);
     const vc = $('#vc', m.el); vc.hidden = false; vc.textContent = `View my order (${cartCount()})`;
   };
 }
 // ---- cart actions ----
 function addLine(it, qty, addons, offer) {
   const oid = offer ? offer.id : null, price = offer && offer.price != null ? Number(offer.price) : Number(it.price);
-  const same = cart.find(l => l.item_id === it.id && (l.offer_id || null) === oid && JSON.stringify(l.addons.map(a => [a.id, a.qty])) === JSON.stringify(addons.map(a => [a.id, a.qty])));
-  if (same) same.qty += qty; else cart.push({ key: uid(), item_id: it.id, name: it.name, price, qty, addons, ...(oid ? { offer_id: oid } : {}) });
+  const cu = (offer && offer.custom_id) || null;
+  const same = cart.find(l => l.item_id === it.id && (l.custom_id || null) === cu && (l.offer_id || null) === oid && JSON.stringify(l.addons.map(a => [a.id, a.qty])) === JSON.stringify(addons.map(a => [a.id, a.qty])));
+  if (same) same.qty += qty; else cart.push({ key: uid(), item_id: it.id, name: it.name, price, qty, addons, ...(oid ? { offer_id: oid } : {}), ...(cu ? { custom_id: cu } : {}) });
   saveCart(); draw();
 }
 function addItem(id) {
@@ -258,7 +262,7 @@ function cartSheet() {
     const l = cart.find(x => x.key === (b.dataset.d || b.dataset.i || b.dataset.x));
     if (b.dataset.t) { type = b.dataset.t; LS.set('mb_qr_type', type); }
     else if (b.dataset.d && l) { l.qty--; if (l.qty <= 0) cart.splice(cart.indexOf(l), 1); }
-    else if (b.dataset.i && l) { const it = itemById(l.item_id); if (it && left(it) > 0) l.qty++; else toast(`Only ${it ? it.stock : 0} left`, 'err'); }
+    else if (b.dataset.i && l) { const it = itemById(l.item_id); if (!l.item_id && l.custom_id) { if (l.qty < 50) l.qty++; } else if (it && left(it) > 0) l.qty++; else toast(`Only ${it ? it.stock : 0} left`, 'err'); }
     else if (b.dataset.x && l) cart.splice(cart.indexOf(l), 1);
     else return;
     saveCart(); paint(); draw(); if (!cart.length) m.close();
@@ -274,7 +278,7 @@ function cartSheet() {
   paint();
 }
 async function place() {
-  const lines = cart.map(l => ({ item_id: l.item_id, qty: l.qty, ...(l.offer_id ? { offer_id: l.offer_id } : {}), addons: l.addons.map(a => ({ id: a.id, qty: a.qty })) }));
+  const lines = cart.map(l => ({ item_id: l.item_id, qty: l.qty, ...(l.offer_id ? { offer_id: l.offer_id } : {}), ...(l.custom_id ? { custom_id: l.custom_id } : {}), addons: l.addons.map(a => ({ id: a.id, qty: a.qty })) }));
   const { data, error } = await sb.rpc('qr_place_order', { p_token: me.token, p_type: type, p_table: type === 'dine_in' ? table : '', p_note: note, p_lines: lines });
   if (error) {
     toast(errText(error), 'err', 6000);

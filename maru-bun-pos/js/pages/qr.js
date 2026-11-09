@@ -93,12 +93,12 @@ export async function render(root) {
       <div class="row wrap" style="gap:10px;align-items:center;margin-top:8px"><button class="btn" id="nsend">📣 Send now</button><span class="small" id="npc"></span></div>
       <div id="nlist"></div></div>`;
     const busy = b => { $('#nsend', root).disabled = b; };
-    bindOfferForm($('#nform', root), OFFER, 'n', busy);
+    bindOfferForm($('#nform', root), OFFER, 'n', busy, () => offerItems);
     $('#nsend', root).onclick = wrap(async () => {
       const row = offerRow(OFFER);
       const { data, error } = await sb.from('qr_notices').insert(row).select().single();
       if (error) throw new Error(errMsg(error) + ' (run sql/update-11.sql, update-12.sql and update-13.sql)');
-      Object.assign(OFFER, newOffer()); itemSig = ''; $('#nform', root).innerHTML = offerFormHTML(OFFER, offerItems, 'n'); bindOfferForm($('#nform', root), OFFER, 'n', busy);
+      Object.assign(OFFER, newOffer()); itemSig = ''; $('#nform', root).innerHTML = offerFormHTML(OFFER, offerItems, 'n'); bindOfferForm($('#nform', root), OFFER, 'n', busy, () => offerItems);
       const r = await qrPush({ kind: 'notice', title: row.title || state.settings.shop_name, body: row.body, image: row.image_url || undefined, offer_id: data && data.id });
       if (r && r.error) toast(`Offer is showing on the QR page, but phone notifications failed: ${r.error}`, 'err', 9000);
       else toast(r && r.sent != null ? `Offer sent · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Offer is now showing on the QR page');
@@ -128,7 +128,7 @@ export async function render(root) {
   // ---- confirm: becomes a real order in the kitchen (same rules as a POS order: bill number, token, stock, cost) ----
   async function confirmQr(x) {
     // enough stock now?
-    const need = {}; (x.items || []).forEach(l => { need[l.item_id] = (need[l.item_id] || 0) + l.qty; });
+    const need = {}; (x.items || []).forEach(l => { if (l.item_id) need[l.item_id] = (need[l.item_id] || 0) + l.qty; });
     const ri = await sb.from('items').select('*'); if (ri.error) throw ri.error;
     const items = ri.data || [], short = [];
     Object.entries(need).forEach(([id, n]) => { const it = items.find(i => i.id === id); if (it && it.track_stock && it.stock < n) short.push(`${it.name}: only ${Math.max(it.stock, 0)} left, ordered ${n}`); });
