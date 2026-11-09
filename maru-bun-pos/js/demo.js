@@ -146,7 +146,7 @@ function qrRpc(name, a) {
       if (!(l.qty >= 1 && l.qty <= 50)) return err('Invalid quantity');
       const it = d.items.find(x => x.id === l.item_id); let unit = it.price; const ads = [];
       if (l.offer_id) {
-        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso())); if (!nt) return err('Sorry, this offer has ended');
+        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!n.customer_ids || n.customer_ids.includes(c.id))); if (!nt) return err('Sorry, this offer has ended');
         const oi = (nt.offer_items || []).find(x => x.item_id === it.id); if (!oi) return err('This item is not part of the offer');
         if (oi.price != null && oi.price !== '') unit = Number(oi.price);
       }
@@ -169,9 +169,10 @@ function qrRpc(name, a) {
       .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
         ready: !!(o.order_id && (d.orders.find(x => x.id === o.order_id) || {}).status === 'served') })));
   }
+  if (name === 'qr_customer_list') return ok((d.qr_customers || []).map(c => ({ id: c.id, name: c.name, phone: c.phone, created_at: c.created_at, orders: d.qr_orders.filter(o => o.customer_id === c.id).length, push: false })));
   if (name === 'qr_notices') {
-    if (!byTok(a.p_token)) return ok([]);
-    return ok((d.qr_notices || []).filter(n => n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, image_url: n.image_url || null, offer_items: n.offer_items || [] })));
+    const me = byTok(a.p_token); if (!me) return ok([]);
+    return ok((d.qr_notices || []).filter(n => (!n.customer_ids || n.customer_ids.includes(me.id)) && n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, image_url: n.image_url || null, offer_items: n.offer_items || [] })));
   }
   if (name === 'qr_history') {
     const c = byTok(a.p_token); if (!c) return ok([]);

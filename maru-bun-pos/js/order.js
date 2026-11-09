@@ -319,6 +319,7 @@ function authSheet(first = 'reg') {
       if (msg) { $('#ae', m.el).innerHTML = `<div class="err">${esc(msg)}</div>`; return; }
       LS.set('mb_qr_token', data.token); me = { token: data.token, name: data.name, phone: data.phone };
       await loadOrders(); await loadNotices(); if (pushSupported() && Notification.permission === 'granted') await syncPush(false); draw(); end(true); m.close();
+      { const pend = LS.get('mb_qr_pending'); if (pend) { LS.del('mb_qr_pending'); offerSheet(pend); } }
     };
     paint(); $('#ap', m.el).focus();
   });
@@ -362,7 +363,7 @@ function schedule() {
 document.addEventListener('pointerdown', () => beep('unlock'), { once: true });   // lets the browser play the ready sound later
 initI18n();
 await loadMe(); await loadMenu(); await loadOrders(); await loadNotices(); pushOn = false; draw(); schedule();
-const openFromLink = () => { const id = new URLSearchParams(location.search).get('offer'); if (id) { history.replaceState(null, '', location.pathname); if (me) offerSheet(id); } };
+const openFromLink = () => { const id = new URLSearchParams(location.search).get('offer'); if (id) { history.replaceState(null, '', location.pathname); if (me) offerSheet(id); else LS.set('mb_qr_pending', id); } };
 openFromLink();
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'offer' && me) offerSheet(e.data.id); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => { if (me && pushSupported() && Notification.permission === 'granted') syncPush(false).then(draw); }).catch(() => {});

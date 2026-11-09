@@ -7,15 +7,9 @@ import { showBillModal, typeLabel, payLabel } from '../bill.js';
 import { openEdit, openRefund } from '../refund.js';
 import { qrSvg } from '../vendor/qrcode.js';
 import { qrPush } from '../push.js';
+import { newOffer, offerFormHTML, bindOfferForm, itemsHTML, offerRow } from '../offerform.js';
+const OFFER = newOffer();   // kept while you move between pages, so nothing you typed is lost
 
-// shrink a photo to max 900px JPEG before upload
-function shrinkImg(file) {
-  return new Promise((res, rej) => {
-    const img = new Image(), u = URL.createObjectURL(file);
-    img.onload = () => { const k = Math.min(1, 900 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); c.toBlob(b => b ? res(b) : rej(new Error('Could not read the photo')), 'image/jpeg', 0.82); };
-    img.onerror = () => rej(new Error('Could not read the photo')); img.src = u;
-  });
-}
 export const orderUrl = () => new URL('order.html', location.href).href;
 
 export async function render(root) {
@@ -58,7 +52,8 @@ export async function render(root) {
     const list = rows.filter(match);
     const news = list.filter(x => x.status === 'new'), prog = list.filter(x => x.status === 'confirmed'), done = list.filter(x => x.status === 'done' && x.day === today).reverse();
     const url = orderUrl();
-    root.innerHTML = `
+    if (!$('#qform', root)) { root.innerHTML = '<div id="qtop"></div><div id="qform"></div><div id="qlist"></div>'; buildForm(); }
+    $('#qtop', root).innerHTML = `
       <div class="card" style="margin-bottom:12px"><div class="row wrap" style="gap:10px">
         <div style="flex:1;min-width:220px"><h2 style="margin:0 0 4px">QR ordering</h2>
           <div class="muted small">Customers scan the QR code, register on their phone and send an order here. You confirm it (it goes to the kitchen) and make the bill when they come with their code.</div></div>
@@ -66,19 +61,8 @@ export async function render(root) {
         <button class="btn ghost" id="qshow">${ico('qr', 16)} ${showQr ? 'Hide' : 'Show'} QR code</button></div>
         ${showQr ? `<div class="row wrap" style="gap:16px;margin-top:12px;align-items:center"><div style="background:#fff;border-radius:12px;padding:6px;line-height:0">${qrSvg(url, { size: 200 })}</div>
           <div style="flex:1;min-width:220px"><div class="small">Customers open:</div><code data-noi18n style="word-break:break-all;color:var(--gold)">${esc(url)}</code>
-          <div class="row wrap" style="margin-top:10px"><button class="btn" id="qprint">${ico('print', 16)} Print QR poster</button><button class="btn ghost" id="qcopy">Copy link</button></div></div></div>` : ''}</div>
-      <div class="card" style="margin-bottom:12px"><h2 style="margin:0 0 4px">📣 Send offer / alert</h2>
-        <div class="muted small" style="margin-bottom:8px">Shown to every customer who is logged in on the QR page, and sent to their phones as a notification (even if their page is closed).</div>
-        <div class="two"><label>Title<input id="nti" maxlength="60" placeholder="e.g. Today's offer"></label>
-          <label>Show for<select id="nex"><option value="today">Until end of today</option><option value="1">1 hour</option><option value="3">3 hours</option><option value="24">24 hours</option><option value="72">3 days</option><option value="0">Until I stop it</option></select></label></div>
-        <label>Message<textarea id="nbo" rows="2" maxlength="300" placeholder="e.g. Hot buns only Rs. 60 until 6 PM!"></textarea></label>
-        <label>Photo (optional)<input type="file" id="nfile" accept="image/*"></label><div id="nprev"></div>
-        <details style="margin:8px 0"><summary style="cursor:pointer;font-weight:600">🎁 Let customers order it – pick the offer items &amp; offer prices (optional)</summary>
-          <div class="muted small" style="margin:6px 0">Tick the items in this offer. Leave the price empty to keep the normal price. The customer taps the notification, sees this offer and adds the items to their order.</div>
-          ${offerItems.map(i => `<div class="row" style="gap:8px;padding:4px 0"><label style="flex:1;display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" data-oi="${i.id}"> <span data-noi18n>${esc(i.name)}</span> <span class="muted small">${fmt(i.price)}</span></label><input type="number" min="0" step="0.01" data-op="${i.id}" placeholder="Offer price" style="width:120px"></div>`).join('') || '<div class="muted small">No menu items</div>'}
-        </details>
-        <div class="row wrap" style="gap:10px;align-items:center"><button class="btn" id="nsend">📣 Send now</button>${pushCount == null ? '' : `<span class="small ${pushCount ? 'muted' : ''}" ${pushCount ? '' : 'style="color:var(--bad)"'}>📱 ${pushCount} phone${pushCount === 1 ? '' : 's'} can get notifications${pushCount ? '' : ' – customers must tap “Turn on notifications” first'}</span>`}</div>
-        ${notices.length ? `<div style="margin-top:12px"><div class="muted small">Showing now:</div>${notices.map(n => `<div class="row wrap" style="gap:8px;padding:6px 0;border-top:1px solid var(--line)">${n.image_url ? `<img src="${esc(n.image_url)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px">` : ''}<div style="flex:1;min-width:180px"><b data-noi18n>${esc(n.title || '')}</b>${(n.offer_items || []).length ? ' <span class="pill ok">🎁 ' + n.offer_items.length + ' item' + (n.offer_items.length > 1 ? 's' : '') + '</span>' : ''} <span data-noi18n>${esc(n.body)}</span><div class="muted small">${tstr(n.created_at)}${n.expires_at ? ' · until ' + tstr(n.expires_at) : ''}</div></div><button class="btn ghost sm" data-stopn="${n.id}">Stop showing</button></div>`).join('')}</div>` : ''}</div>
+          <div class="row wrap" style="margin-top:10px"><button class="btn" id="qprint">${ico('print', 16)} Print QR poster</button><button class="btn ghost" id="qcopy">Copy link</button></div></div></div>` : ''}</div>`;
+    $('#qlist', root).innerHTML = `
       <div class="toolbar"><input id="qs" placeholder="Find by order code (e.g. Q7), name or phone" value="${esc(q)}" style="max-width:380px"><div class="spacer"></div>
         <span class="muted small">Press Enter on a code to collect it</span></div>
       <h3 style="margin:14px 0 8px">New orders ${news.length ? `<span class="pill bad">${news.length}</span>` : ''}</h3>
@@ -95,35 +79,39 @@ export async function render(root) {
       if (error) { open = !open; throw new Error(errMsg(error) + ' (run sql/update-10.sql)'); }
       state.settings = { ...state.settings, qr_open: open }; toast(open ? 'QR orders are ON' : 'QR orders are OFF – customers see "not taking orders"');
     });
-    let nImage = '';
-    $('#nfile', root).onchange = async e => {
-      const f = e.target.files[0]; nImage = ''; $('#nprev', root).textContent = ''; if (!f) return;
-      $('#nsend', root).disabled = true; $('#nprev', root).textContent = 'Uploading photo…';
-      try {
-        const blob = await shrinkImg(f), path = `offer-${Date.now()}.jpg`;
-        const { error } = await sb.storage.from('promos').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-        if (error) throw error;
-        nImage = sb.storage.from('promos').getPublicUrl(path).data.publicUrl;
-        $('#nprev', root).innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="" style="max-width:100%;max-height:160px;border-radius:10px;display:block;margin:6px 0">`;
-      } catch (err) { $('#nprev', root).innerHTML = `<div class="err">${esc(errMsg(err))}<br><small>Run sql/update-6.sql in the Supabase SQL Editor first (photo storage).</small></div>`; e.target.value = ''; }
-      $('#nsend', root).disabled = false;
-    };
-    $('#nsend', root).onclick = wrap(async () => {
-      const title = $('#nti', root).value.trim(), body = $('#nbo', root).value.trim(); if (!body) return toast('Type the message first', 'err');
-      const ex = $('#nex', root).value; let expires = null;
-      if (ex === 'today') expires = new Date(new Date(Date.now() + 19800000).toISOString().slice(0, 10) + 'T00:00:00+05:30').getTime() + 864e5;
-      else if (ex !== '0') expires = Date.now() + Number(ex) * 36e5;
-      const offer = [...root.querySelectorAll('[data-oi]:checked')].map(c => { const p = root.querySelector(`[data-op="${c.dataset.oi}"]`).value; return { item_id: c.dataset.oi, price: p === '' ? null : Number(p) }; });
-      const { data: row, error } = await sb.from('qr_notices').insert({ title, body, image_url: nImage || null, offer_items: offer, expires_at: expires ? new Date(expires).toISOString() : null }).select().single();
-      if (error) throw new Error(errMsg(error) + ' (run sql/update-11.sql and sql/update-12.sql)');
-      const r = await qrPush({ kind: 'notice', title: title || state.settings.shop_name, body, image: nImage || undefined, offer_id: row && row.id });
-      if (r && r.error) toast(`Offer is showing on the QR page, but phone notifications failed: ${r.error}`, 'err', 9000);
-      else toast(r && r.sent != null ? `Offer sent · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Offer is now showing on the QR page');
-    });
-    root.querySelectorAll('[data-stopn]').forEach(b => { b.onclick = wrap(async () => { await sb.from('qr_notices').update({ active: false }).eq('id', b.dataset.stopn); toast('Stopped'); }); });
+    paintNotices();
     $('#qshow', root).onclick = () => { showQr = !showQr; draw(); };
     const pr = $('#qprint', root); if (pr) pr.onclick = () => printPoster(url);
     const cp = $('#qcopy', root); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { toast(url, 'info', 8000); } };
+  }
+
+  // ---- the offer / alert card: built ONCE, so typing is never interrupted by a refresh ----
+  function buildForm() {
+    $('#qform', root).innerHTML = `<div class="card" style="margin-bottom:12px"><h2 style="margin:0 0 4px">📣 Send offer / alert</h2>
+      <div class="muted small" style="margin-bottom:8px">Shown to every customer who is logged in on the QR page, and sent to their phones as a notification (even if their page is closed). To message only some customers, use <b>Customers → Message QR customers</b>.</div>
+      <div id="nform">${offerFormHTML(OFFER, offerItems, 'n')}</div>
+      <div class="row wrap" style="gap:10px;align-items:center;margin-top:8px"><button class="btn" id="nsend">📣 Send now</button><span class="small" id="npc"></span></div>
+      <div id="nlist"></div></div>`;
+    const busy = b => { $('#nsend', root).disabled = b; };
+    bindOfferForm($('#nform', root), OFFER, 'n', busy);
+    $('#nsend', root).onclick = wrap(async () => {
+      const row = offerRow(OFFER);
+      const { data, error } = await sb.from('qr_notices').insert(row).select().single();
+      if (error) throw new Error(errMsg(error) + ' (run sql/update-11.sql, update-12.sql and update-13.sql)');
+      Object.assign(OFFER, newOffer()); itemSig = ''; $('#nform', root).innerHTML = offerFormHTML(OFFER, offerItems, 'n'); bindOfferForm($('#nform', root), OFFER, 'n', busy);
+      const r = await qrPush({ kind: 'notice', title: row.title || state.settings.shop_name, body: row.body, image: row.image_url || undefined, offer_id: data && data.id });
+      if (r && r.error) toast(`Offer is showing on the QR page, but phone notifications failed: ${r.error}`, 'err', 9000);
+      else toast(r && r.sent != null ? `Offer sent · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Offer is now showing on the QR page');
+    });
+    $('#nlist', root).onclick = wrap(async e => { const b = e.target.closest('[data-stopn]'); if (!b) return; await sb.from('qr_notices').update({ active: false }).eq('id', b.dataset.stopn); toast('Stopped'); });
+  }
+  // only the small parts that change on their own (phone count, "showing now" list, item list) are refreshed
+  let itemSig = '';
+  function paintNotices() {
+    const sig = JSON.stringify(offerItems.map(i => [i.id, i.name, i.price]));
+    if (sig !== itemSig) { itemSig = sig; $('#nitems', root).innerHTML = itemsHTML(OFFER, offerItems, 'n'); }
+    $('#npc', root).innerHTML = pushCount == null ? '' : `<span class="${pushCount ? 'muted' : ''}" ${pushCount ? '' : 'style="color:var(--bad)"'}>📱 ${pushCount} phone${pushCount === 1 ? '' : 's'} can get notifications${pushCount ? '' : ' – customers must tap “Turn on notifications” first'}</span>`;
+    $('#nlist', root).innerHTML = notices.length ? `<div style="margin-top:12px"><div class="muted small">Showing now:</div>${notices.map(n => `<div class="row wrap" style="gap:8px;padding:6px 0;border-top:1px solid var(--line)">${n.image_url ? `<img src="${esc(n.image_url)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px">` : ''}<div style="flex:1;min-width:180px"><b data-noi18n>${esc(n.title || '')}</b>${(n.offer_items || []).length ? ' <span class="pill ok">🎁 ' + n.offer_items.length + ' item' + (n.offer_items.length > 1 ? 's' : '') + '</span>' : ''}${n.customer_ids ? ` <span class="pill info">👤 ${n.customer_ids.length} customer${n.customer_ids.length > 1 ? 's' : ''}</span>` : ''} <span data-noi18n>${esc(n.body)}</span><div class="muted small">${tstr(n.created_at)}${n.expires_at ? ' · until ' + tstr(n.expires_at) : ''}</div></div><button class="btn ghost sm" data-stopn="${n.id}">Stop showing</button></div>`).join('')}</div>` : '';
   }
 
   function printPoster(url) {

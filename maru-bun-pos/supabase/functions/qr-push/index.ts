@@ -32,7 +32,9 @@ Deno.serve(async (req: Request) => {
   let payload: Record<string, string> = {};
 
   if (b.kind === 'notice') {
-    subs = await rest('qr_push?select=id,endpoint,p256dh,auth&limit=2000');
+    // customer_ids (optional) = a personal message for only these QR customers
+    const only = Array.isArray(b.customer_ids) ? (b.customer_ids as unknown as string[]).filter((x) => uuid.test(x)) : [];
+    subs = await rest(`qr_push?select=id,endpoint,p256dh,auth&limit=2000${only.length ? `&customer_id=in.(${only.join(',')})` : ''}`);
     payload = { kind: 'notice', title: String(b.title || 'මරු Bun').slice(0, 80), body: String(b.body || '').slice(0, 300), tag: 'mb-notice' };
     if (typeof b.image === 'string' && b.image.startsWith(base + '/storage/')) payload.image = b.image;
     payload.url = uuid.test(b.offer_id || '') ? `order.html?offer=${b.offer_id}` : 'order.html';

@@ -184,3 +184,10 @@ Notes: the notification sound on a closed page is the phone's own notification s
 3. QR Ordering → 📣 Send offer / alert: add a photo, and (optional) tick the offer items + offer prices. Customers see the offer card (tap → offer screen → Add → order). Prices are checked on the server.
 4. The QR menu page now lists only **today's** orders; older ones are in 🕘 My orders.
 5. The send box shows how many phones can get notifications; if sending fails it shows the reason.
+
+## Update 18 – personal messages/offers, steadier offer form, new menu order
+1. Run `sql/update-13.sql` (after update-12).
+2. Re-deploy the Edge Function `qr-push` (new `supabase/functions/qr-push/index.ts`) – it can now notify only chosen customers.
+3. **Customers → 💬 Message QR customers**: choose QR-registered customers, write a message / offer (photo, offer items + prices), send by QR menu + phone notification (only they see it) and/or WhatsApp (opens each chat with the message and the menu/offer link).
+4. The "Send offer / alert" form on QR Ordering no longer loses what you typed when the page refreshes, and the offer-item/price list is always visible.
+5. Menu order: POS, QR Ordering, Orders & Billing, Customers, Kitchen Display, Dashboard, Menu Management, Inventory, Google Review, Settings & Security.

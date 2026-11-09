@@ -1,4 +1,9 @@
 // Supabase Edge Function: send-promo
+// Sends a WhatsApp *template* message (optionally with a photo header) to many customers using the
+// official WhatsApp Business Cloud API. Secrets (set in Supabase > Edge Functions > Secrets):
+//   WA_TOKEN    = permanent access token from Meta
+//   WA_PHONE_ID = WhatsApp "Phone number ID" from Meta
+
 type Env = Record<string, string | undefined>;
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -26,6 +31,7 @@ const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e
 export async function handle(req: Request, env: Env, fetchImpl: FetchFn = fetch, pause = 150): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
+  // only a signed-in staff user may use this (the public anon key alone is not enough)
   const u = await fetchImpl(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: { Authorization: req.headers.get('Authorization') || '', apikey: env.SUPABASE_ANON_KEY || '' },
   });
@@ -85,5 +91,6 @@ export async function handle(req: Request, env: Env, fetchImpl: FetchFn = fetch,
   return json({ results });
 }
 
+// Supabase / Deno runtime entry point
 const deno = (globalThis as unknown as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void; env: { toObject: () => Env } } }).Deno;
 if (deno) deno.serve((req) => handle(req, deno.env.toObject()));

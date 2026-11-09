@@ -18,11 +18,11 @@ import * as settings from './pages/settings.js';
 
 const PAGES = [
   { id: 'pos', label: 'POS', icon: 'cart', mod: pos },
+  { id: 'qr', label: 'QR Ordering', icon: 'qr', mod: qr },
   { id: 'orders', label: 'Orders & Billing', icon: 'receipt', mod: orders },
   { id: 'customers', label: 'Customers', icon: 'users', mod: customers },
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', mod: dashboard },
   { id: 'kitchen', label: 'Kitchen Display', icon: 'kitchen', mod: kitchen },
-  { id: 'qr', label: 'QR Ordering', icon: 'qr', mod: qr },
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', mod: dashboard },
   { id: 'menu', label: 'Menu Management', icon: 'menu', mod: menu },
   { id: 'inventory', label: 'Inventory', icon: 'inventory', mod: inventory },
   { id: 'review', label: 'Google Review', icon: 'star', mod: review },
