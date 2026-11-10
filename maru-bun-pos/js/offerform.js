@@ -31,7 +31,7 @@ export function itemsHTML(f, items, p) {
 // p = id prefix so two forms can exist on one page
 export function offerFormHTML(f, items, p = 'n') {
   return `<div class="two"><label>Title<input id="${p}ti" maxlength="60" placeholder="e.g. Today's offer" value="${esc(f.title)}"></label>
-      <label>Show for<select id="${p}ex">${EX.map(([v, t]) => `<option value="${v}" ${f.ex === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
+      <label>Show for<select id="${p}ex">${(f.editing ? [['keep', 'Keep the current end time'], ...EX] : EX).map(([v, t]) => `<option value="${v}" ${f.ex === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
     <label>Message<textarea id="${p}bo" rows="2" maxlength="300" placeholder="e.g. Hot buns only Rs. 60 until 6 PM!">${esc(f.body)}</textarea></label>
     <label>Photo (optional)<input type="file" id="${p}file" accept="image/*"></label><div id="${p}prev">${f.preview || ''}</div>
     <div style="margin:10px 0 4px"><b>🎁 Offer items &amp; offer price</b> <span class="muted small">(optional)</span></div>
@@ -76,10 +76,18 @@ export function bindOfferForm(root, f, p = 'n', busy = () => {}, getItems = () =
   root.addEventListener('click', e => { if (e.target.closest(`[data-${p}noimg]`)) { f.image = ''; f.preview = ''; $(`#${p}prev`, root).innerHTML = ''; $(`#${p}file`, root).value = ''; } });
 }
 
+// fill a form object from a stored notice (for editing)
+export function offerFromNotice(n) {
+  const f = newOffer(); f.editing = true; f.ex = 'keep'; f.title = n.title || ''; f.body = n.body || ''; f.image = n.image_url || '';
+  if (f.image) f.preview = `<img src="${esc(f.image)}" alt="" style="max-width:100%;max-height:160px;border-radius:10px;display:block;margin:6px 0"><button type="button" class="btn ghost sm" data-enoimg>Remove photo</button>`;
+  for (const o of n.offer_items || []) { if (o.name) f.custom.push({ id: o.id || ('c' + Math.random().toString(36).slice(2, 8)), name: o.name, price: o.price ?? '', item_id: o.item_id || '' }); else f.sel[o.item_id] = o.price ?? ''; }
+  return f;
+}
+
 // the row to store in qr_notices (throws a readable error when something is missing)
 export function offerRow(f) {
   const body = f.body.trim(); if (!body) throw new Error('Type the message first');
-  let expires = null;
+  let expires = null; const keep = f.ex === 'keep';
   if (f.ex === 'today') expires = new Date(new Date(Date.now() + 19800000).toISOString().slice(0, 10) + 'T00:00:00+05:30').getTime() + 864e5;
   else if (f.ex !== '0') expires = Date.now() + Number(f.ex) * 36e5;
   const offer = Object.entries(f.sel).map(([item_id, price]) => ({ item_id, price: price === '' || price == null ? null : Number(price) }));
@@ -91,5 +99,7 @@ export function offerRow(f) {
     if (price === '' || !(Number(price) >= 0)) throw new Error(`Type a price for "${name}"`);
     offer.push({ id: c.id, name, price: Number(price), item_id: c.item_id || null });
   }
-  return { title: f.title.trim(), body, image_url: f.image || null, offer_items: offer, expires_at: expires ? new Date(expires).toISOString() : null };
+  const row = { title: f.title.trim(), body, image_url: f.image || null, offer_items: offer, expires_at: expires ? new Date(expires).toISOString() : null };
+  if (keep) delete row.expires_at;
+  return row;
 }

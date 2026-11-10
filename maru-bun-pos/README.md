@@ -213,3 +213,10 @@ Notes: the notification sound on a closed page is the phone's own notification s
 - **Send by:** 📱 QR menu + phone notification (only chosen customers see it) and/or 💬 WhatsApp (opens WhatsApp for each customer with the message and the offer link).
 - Every customer row has a button (📱 QR / 🎁 Offer) that opens the panel with that customer already chosen.
 - **Run `sql/update-16.sql`** (after 10–15). No Edge Function redeploy needed.
+
+## Update 22 – Edit offers, offers can't be dismissed, monthly history, share menu
+- **Customers → Send offer / alert → Showing now → ✏️ Edit**: change title, message, photo, items, prices, custom items. End time can stay as it is ("Keep the current end time"). Optional: send a phone notification again.
+- On the QR menu the customer's ✕ on offers is gone. An offer disappears only when you press **Stop showing** (or it expires).
+- Customer **My order history** shows only the **current month** (Sri Lanka time). On the 1st of a new month it starts empty. (Old orders stay in your own Orders & Billing records.)
+- New **🔗 share button** on the QR menu: opens the phone's share sheet (WhatsApp etc.); on a computer it shows WhatsApp / Copy link.
+- **Run `sql/update-17.sql`**. No Edge Function redeploy.

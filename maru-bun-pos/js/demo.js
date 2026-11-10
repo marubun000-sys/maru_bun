@@ -169,7 +169,8 @@ function qrRpc(name, a) {
   }
   if (name === 'qr_my_orders') {
     const c = byTok(a.p_token); if (!c) return ok([]);
-    return ok(d.qr_orders.filter(o => o.customer_id === c.id).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 10)
+    const mon = new Date(Date.now() + 19800000).toISOString().slice(0, 7);
+    return ok(d.qr_orders.filter(o => o.customer_id === c.id && new Date(new Date(o.created_at).getTime() + 19800000).toISOString().slice(0, 7) === mon).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 10)
       .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
         ready: !!(o.order_id && (d.orders.find(x => x.id === o.order_id) || {}).status === 'served') })));
   }
@@ -188,7 +189,8 @@ function qrRpc(name, a) {
   }
   if (name === 'qr_history') {
     const c = byTok(a.p_token); if (!c) return ok([]);
-    return ok(d.qr_orders.filter(o => o.customer_id === c.id).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 100)
+    const mon = new Date(Date.now() + 19800000).toISOString().slice(0, 7);
+    return ok(d.qr_orders.filter(o => o.customer_id === c.id && new Date(new Date(o.created_at).getTime() + 19800000).toISOString().slice(0, 7) === mon).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 100)
       .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, table_no: o.table_no, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
         total: o.status === 'done' ? ((d.orders.find(x => x.id === o.order_id) || {}).total ?? null) : null })));
   }

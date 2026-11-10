@@ -128,10 +128,19 @@ async function dropPush() {
 }
 const pushBlocked = () => 'Notification' in window && Notification.permission === 'denied';
 
+// ---- share the menu with friends ----
+async function shareMenu() {
+  const url = location.origin + location.pathname, shop = ((menu && menu.shop) || {}).name || 'Our menu', text = `🍞 ${shop} – order hot buns here:`;
+  if (navigator.share) { try { await navigator.share({ title: shop, text, url }); } catch { /* cancelled */ } return; }
+  const m = modal(`<h3>🔗 Share this menu</h3><input id="shu" readonly value="${esc(url)}" style="width:100%"><div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}">💬 WhatsApp</a><button class="btn ghost" id="shc">Copy link</button><div class="spacer"></div><button class="btn ghost" id="shx">Close</button></div>`);
+  $('#shx', m.el).onclick = () => m.close();
+  $('#shc', m.el).onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Link copied ✓'); } catch { $('#shu', m.el).select(); } };
+}
+
 // ---- order history ----
 const when = iso => { const d = new Date(iso); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
 async function historySheet() {
-  const m = modal(`<h3>🕘 My order history</h3><div id="hl" class="muted">Loading…</div><div class="row end" style="margin-top:10px"><button class="btn ghost" id="k">Close</button></div>`);
+  const m = modal(`<h3>🕘 My order history</h3><div class="muted small" style="margin:-4px 0 6px">This month's orders</div><div id="hl" class="muted">Loading…</div><div class="row end" style="margin-top:10px"><button class="btn ghost" id="k">Close</button></div>`);
   $('#k', m.el).onclick = () => m.close();
   const { data, error } = await sb.rpc('qr_history', { p_token: me.token });
   const box = $('#hl', m.el); if (!box) return;
@@ -141,7 +150,7 @@ async function historySheet() {
     return `<div class="qo-order"><div class="row"><span class="qo-code" data-noi18n>${esc(o.code)}</span><div class="spacer"></div><span class="pill ${cls}">${txt}</span></div>
       <div class="muted small" style="margin-top:4px" data-noi18n>${when(o.created_at)}</div>
       <div class="small" style="margin-top:4px" data-noi18n>${(o.items || []).map(l => `${l.qty} × ${esc(l.name)}`).join(', ')}</div>
-      <div class="row small" style="margin-top:4px"><span>${o.order_type === 'dine_in' ? 'Dine-in' : 'Takeaway'}${o.table_no ? ' · Table ' + esc(o.table_no) : ''}</span><div class="spacer"></div><b>${money(o.total != null ? o.total : o.subtotal)}</b></div></div>`; }).join('') : '<div class="empty">No orders yet</div>';
+      <div class="row small" style="margin-top:4px"><span>${o.order_type === 'dine_in' ? 'Dine-in' : 'Takeaway'}${o.table_no ? ' · Table ' + esc(o.table_no) : ''}</span><div class="spacer"></div><b>${money(o.total != null ? o.total : o.subtotal)}</b></div></div>`; }).join('') : '<div class="empty">No orders this month</div>';
 }
 
 function draw() {
@@ -151,10 +160,10 @@ function draw() {
   const cats = ((menu && menu.categories) || []).filter(c => ((menu.items) || []).some(i => i.category_id === c.id));
   root.innerHTML = `<div class="qo">
     <div class="qo-head"><img src="assets/logo.jpg" alt=""><div class="qo-title"><b>${esc(shop.name || 'Order here')}</b><span>${esc(shop.tagline || '')}</span></div>
-      <span class="ctls">${canInstall() ? '<button class="ctl" data-ctl="install" data-noi18n>📲 Install</button>' : ''}<button class="ctl" data-ctl="theme" data-noi18n aria-label="Dark / light mode"></button><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
+      <span class="ctls">${canInstall() ? '<button class="ctl" data-ctl="install" data-noi18n>📲 Install</button>' : ''}<button class="ctl" data-ctl="share" data-noi18n aria-label="Share menu" title="Share this menu">🔗</button><button class="ctl" data-ctl="theme" data-noi18n aria-label="Dark / light mode"></button><button class="ctl" data-ctl="lang" data-noi18n></button></span></div>
     <div class="qo-me">${me ? `Hi <b data-noi18n>${esc(me.name)}</b> · <a href="#" id="qhist">🕘 My orders</a> · ${pushSupported() && !pushOn ? (pushBlocked() ? '<span class="muted small">🔕 Notifications blocked in browser settings</span> · ' : '<a href="#" id="qnot">🔔 Turn on notifications</a> · ') : ''}<a href="#" id="qout">Log out</a>` : `<a href="#" id="qin">Log in / Register</a> to send your order`}</div>
     ${canInstall() ? '<div class="qo-install"><span>📲 Get our app on your phone – quick ordering &amp; order alerts</span><button class="btn sm" data-ctl="install">Install</button></div>' : ''}
-    ${notices.filter(n => !dismissed().includes(n.id)).map(n => `<div class="qo-notice"><button class="qx" data-dis="${n.id}" aria-label="close">✕</button>${n.image_url ? `<img class="qo-nimg" src="${esc(n.image_url)}" alt="" data-offer="${n.id}">` : ''}${n.title ? `<b data-noi18n>${esc(n.title)}</b>` : ''}<div data-noi18n>${esc(n.body)}</div>${(n.offer_items || []).length ? `<button class="btn sm" data-offer="${n.id}" style="margin-top:8px">🎁 View offer &amp; order</button>` : ''}</div>`).join('')}
+    ${notices.map(n => `<div class="qo-notice">${n.image_url ? `<img class="qo-nimg" src="${esc(n.image_url)}" alt="" data-offer="${n.id}">` : ''}${n.title ? `<b data-noi18n>${esc(n.title)}</b>` : ''}<div data-noi18n>${esc(n.body)}</div>${(n.offer_items || []).length ? `<button class="btn sm" data-offer="${n.id}" style="margin-top:8px">🎁 View offer &amp; order</button>` : ''}</div>`).join('')}
     ${loadErr ? `<div class="err">${esc(loadErr)}<br><small>If this keeps happening, ask the shop.</small></div>` : ''}
     ${menu && !open ? '<div class="qo-closed">Sorry, we are not taking QR orders right now. You can look at the menu, but please order at the counter.</div>' : ''}
     ${banner && orders.some(o => o.ready && o.status === 'confirmed') ? `<div class="qo-ready" id="qready">${esc(banner)}</div>` : ''}
@@ -349,6 +358,7 @@ root.addEventListener('click', async e => {
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-ctl=lang]'); if (b) { setLang(getLang() === 'si' ? 'en' : 'si'); paintCtl(); }
+  if (e.target.closest('[data-ctl=share]')) return shareMenu();
   if (e.target.closest('[data-ctl=theme]')) setTheme(theme() === 'light' ? 'dark' : 'light');
   if (e.target.closest('[data-ctl=install]')) installApp();
 });

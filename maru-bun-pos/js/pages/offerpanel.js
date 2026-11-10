@@ -5,7 +5,7 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
 import { $, esc, dtstr, toast, errMsg, modal, normPhone } from '../utils.js';
-import { newOffer, offerFormHTML, bindOfferForm, itemsHTML, offerRow } from '../offerform.js';
+import { newOffer, offerFormHTML, bindOfferForm, itemsHTML, offerRow, offerFromNotice } from '../offerform.js';
 import { qrPush } from '../push.js';
 import { orderUrl } from './qr.js';
 
@@ -54,7 +54,7 @@ export function mountOfferPanel(host) {
     const sig = JSON.stringify(items.map(i => [i.id, i.name, i.price]));
     if (sig !== itemSig) { itemSig = sig; $('#oitems', root).innerHTML = itemsHTML(F, items, 'o'); }
     $('#oppc', root).innerHTML = pushCount == null ? '' : `<span class="${pushCount ? 'muted' : ''}" ${pushCount ? '' : 'style="color:var(--bad)"'}>📱 ${pushCount} phone${pushCount === 1 ? '' : 's'} can get notifications${pushCount ? '' : ' – customers must tap “Turn on notifications” first'}</span>`;
-    $('#opnl', root).innerHTML = notices.length ? `<div style="margin-top:12px"><div class="muted small">Showing now:</div>${notices.map(n => `<div class="row wrap" style="gap:8px;padding:6px 0;border-top:1px solid var(--line)">${n.image_url ? `<img src="${esc(n.image_url)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px">` : ''}<div style="flex:1;min-width:180px"><b data-noi18n>${esc(n.title || '')}</b>${(n.offer_items || []).length ? ` <span class="pill ok">🎁 ${n.offer_items.length} item${n.offer_items.length > 1 ? 's' : ''}</span>` : ''}${n.phones ? ` <span class="pill info">👤 ${n.phones.length} customer${n.phones.length > 1 ? 's' : ''}</span>` : ' <span class="pill info">🌍 everyone</span>'} <span data-noi18n>${esc(n.body)}</span><div class="muted small">${dtstr(n.created_at)}${n.expires_at ? ' · until ' + dtstr(n.expires_at) : ''}</div></div><button class="btn ghost sm" data-stopn="${n.id}">Stop showing</button></div>`).join('')}</div>` : '';
+    $('#opnl', root).innerHTML = notices.length ? `<div style="margin-top:12px"><div class="muted small">Showing now:</div>${notices.map(n => `<div class="row wrap" style="gap:8px;padding:6px 0;border-top:1px solid var(--line)">${n.image_url ? `<img src="${esc(n.image_url)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px">` : ''}<div style="flex:1;min-width:180px"><b data-noi18n>${esc(n.title || '')}</b>${(n.offer_items || []).length ? ` <span class="pill ok">🎁 ${n.offer_items.length} item${n.offer_items.length > 1 ? 's' : ''}</span>` : ''}${n.phones ? ` <span class="pill info">👤 ${n.phones.length} customer${n.phones.length > 1 ? 's' : ''}</span>` : ' <span class="pill info">🌍 everyone</span>'} <span data-noi18n>${esc(n.body)}</span><div class="muted small">${dtstr(n.created_at)}${n.expires_at ? ' · until ' + dtstr(n.expires_at) : ''}</div></div><button class="btn ghost sm" data-editn="${n.id}">✏️ Edit</button><button class="btn ghost sm" data-stopn="${n.id}">Stop showing</button></div>`).join('')}</div>` : '';
   }
   const paintAll = () => { paintWho(); paintVia(); paintMisc(); };
 
@@ -88,7 +88,25 @@ export function mountOfferPanel(host) {
     paintWho();
   };
   $('#opvia', root).onchange = e => { if (e.target.id === 'vq') S.qr = e.target.checked; if (e.target.id === 'vw') S.wa = e.target.checked; };
-  $('#opnl', root).onclick = async e => { const b = e.target.closest('[data-stopn]'); if (!b) return; await sb.from('qr_notices').update({ active: false }).eq('id', b.dataset.stopn); toast('Stopped'); load(); };
+  function editNotice(n) {
+    const E = offerFromNotice(n), m = modal(`<h3>✏️ Edit offer</h3><div id="ef">${offerFormHTML(E, items, 'e')}</div>
+      <label class="check"><input type="checkbox" id="enot"> 🔔 Send a phone notification again <span class="muted small">(customers who can see this offer)</span></label>
+      <div class="row end" style="gap:8px;margin-top:10px"><button class="btn ghost" id="ecx">Cancel</button><button class="btn" id="esv">Save changes</button></div>`, { wide: true, outside: false });
+    const sv = $('#esv', m.el); bindOfferForm($('#ef', m.el), E, 'e', b => { sv.disabled = b; }, () => items);
+    $('#ecx', m.el).onclick = () => m.close();
+    sv.onclick = async () => {
+      try {
+        sv.disabled = true; const row = offerRow(E);
+        const { error } = await sb.from('qr_notices').update(row).eq('id', n.id); if (error) throw error;
+        if ($('#enot', m.el).checked) {
+          const r = await qrPush({ kind: 'notice', title: row.title || state.settings.shop_name, body: row.body, image: row.image_url || undefined, offer_id: n.id, ...(n.customer_ids ? { customer_ids: n.customer_ids } : {}) });
+          if (r && r.error) toast(`Saved, but phone notification failed: ${r.error}`, 'err', 8000);
+        }
+        m.close(); toast('Offer updated ✓'); load();
+      } catch (err) { toast(errMsg(err), 'err', 6000); sv.disabled = false; }
+    };
+  }
+  $('#opnl', root).onclick = async e => { const ed = e.target.closest('[data-editn]'); if (ed) { const n = notices.find(x => x.id === ed.dataset.editn); if (n) editNotice(n); return; } const b = e.target.closest('[data-stopn]'); if (!b) return; await sb.from('qr_notices').update({ active: false }).eq('id', b.dataset.stopn); toast('Stopped'); load(); };
 
   function waOneByOne(list, text) {
     let i = 0; const m = modal('<div id="wb"></div>', { outside: false });
