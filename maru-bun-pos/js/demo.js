@@ -146,11 +146,11 @@ function qrRpc(name, a) {
       if (!(l.qty >= 1 && l.qty <= 50)) return err('Invalid quantity');
       let it = d.items.find(x => x.id === l.item_id), unit = it ? it.price : 0, nm = null; const ads = [];
       if (l.custom_id) {
-        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!n.customer_ids || n.customer_ids.includes(c.id))); if (!nt) return err('Sorry, this offer has ended');
+        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!(n.customer_ids || n.phones) || (n.customer_ids || []).includes(c.id) || (n.phones || []).includes(c.phone))); if (!nt) return err('Sorry, this offer has ended');
         const oi = (nt.offer_items || []).find(x => x.id === l.custom_id); if (!oi) return err('This item is not part of the offer');
         nm = oi.name; unit = Number(oi.price); it = oi.item_id ? d.items.find(x => x.id === oi.item_id) : null;
       } else if (l.offer_id) {
-        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!n.customer_ids || n.customer_ids.includes(c.id))); if (!nt) return err('Sorry, this offer has ended');
+        const nt = (d.qr_notices || []).find(n => n.id === l.offer_id && n.active !== false && (!n.expires_at || n.expires_at > iso()) && (!(n.customer_ids || n.phones) || (n.customer_ids || []).includes(c.id) || (n.phones || []).includes(c.phone))); if (!nt) return err('Sorry, this offer has ended');
         const oi = (nt.offer_items || []).find(x => x.item_id === it.id); if (!oi) return err('This item is not part of the offer');
         if (oi.price != null && oi.price !== '') unit = Number(oi.price);
       }
@@ -184,7 +184,7 @@ function qrRpc(name, a) {
   if (name === 'qr_customer_list') return ok((d.qr_customers || []).map(c => ({ id: c.id, name: c.name, phone: c.phone, created_at: c.created_at, locked: (c.locked_until || 0) > Date.now(), orders: d.qr_orders.filter(o => o.customer_id === c.id).length, push: false })));
   if (name === 'qr_notices') {
     const me = byTok(a.p_token); if (!me) return ok([]);
-    return ok((d.qr_notices || []).filter(n => (!n.customer_ids || n.customer_ids.includes(me.id)) && n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, image_url: n.image_url || null, offer_items: n.offer_items || [] })));
+    return ok((d.qr_notices || []).filter(n => (!(n.customer_ids || n.phones) || (n.customer_ids || []).includes(me.id) || (n.phones || []).includes(me.phone)) && n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, image_url: n.image_url || null, offer_items: n.offer_items || [] })));
   }
   if (name === 'qr_history') {
     const c = byTok(a.p_token); if (!c) return ok([]);

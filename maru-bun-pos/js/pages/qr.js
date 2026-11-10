@@ -7,21 +7,17 @@ import { showBillModal, typeLabel, payLabel } from '../bill.js';
 import { openEdit, openRefund } from '../refund.js';
 import { qrSvg } from '../vendor/qrcode.js';
 import { qrPush } from '../push.js';
-import { newOffer, offerFormHTML, bindOfferForm, itemsHTML, offerRow } from '../offerform.js';
-const OFFER = newOffer();   // kept while you move between pages, so nothing you typed is lost
 
 export const orderUrl = () => new URL('order.html', location.href).href;
 
 export async function render(root) {
-  let rows = [], notices = [], offerItems = [], pushCount = null, linked = {}, q = '', open = state.settings.qr_open !== false, showQr = false;
+  let rows = [], linked = {}, q = '', open = state.settings.qr_open !== false, showQr = false;
 
   async function load() {
     const since = new Date(Date.now() - 3 * 864e5).toISOString();
     const r = await sb.from('qr_orders').select('*').gte('created_at', since).order('created_at', { ascending: true });
     if (r.error) { root.innerHTML = `<div class="err">${esc(errMsg(r.error))}<br><small>Run sql/update-10.sql in the Supabase SQL Editor first.</small></div>`; return; }
     rows = r.data || [];
-    { const ir = await sb.from('items').select('id,name,price').eq('active', true).order('name'); offerItems = ir.data || []; const pc = await sb.from('qr_push').select('id', { count: 'exact', head: true }); pushCount = pc.error ? null : (pc.count ?? 0); }
-    { const nr = await sb.from('qr_notices').select('*').eq('active', true).order('created_at', { ascending: false }).limit(20); notices = nr.error ? [] : (nr.data || []).filter(n => !n.expires_at || n.expires_at > new Date().toISOString()); }
     const ids = rows.filter(x => x.order_id).map(x => x.order_id);
     linked = {};
     if (ids.length) { const o = await sb.from('orders').select('*').in('id', ids); (o.data || []).forEach(x => { linked[x.id] = x; }); }
@@ -52,7 +48,7 @@ export async function render(root) {
     const list = rows.filter(match);
     const news = list.filter(x => x.status === 'new'), prog = list.filter(x => x.status === 'confirmed'), done = list.filter(x => x.status === 'done' && x.day === today).reverse();
     const url = orderUrl();
-    if (!$('#qform', root)) { root.innerHTML = '<div id="qtop"></div><div id="qform"></div><div id="qlist"></div>'; buildForm(); }
+    if (!$('#qtop', root)) root.innerHTML = '<div id="qtop"></div><div id="qlist"></div>';
     $('#qtop', root).innerHTML = `
       <div class="card" style="margin-bottom:12px"><div class="row wrap" style="gap:10px">
         <div style="flex:1;min-width:220px"><h2 style="margin:0 0 4px">QR ordering</h2>
@@ -79,39 +75,9 @@ export async function render(root) {
       if (error) { open = !open; throw new Error(errMsg(error) + ' (run sql/update-10.sql)'); }
       state.settings = { ...state.settings, qr_open: open }; toast(open ? 'QR orders are ON' : 'QR orders are OFF – customers see "not taking orders"');
     });
-    paintNotices();
     $('#qshow', root).onclick = () => { showQr = !showQr; draw(); };
     const pr = $('#qprint', root); if (pr) pr.onclick = () => printPoster(url);
     const cp = $('#qcopy', root); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { toast(url, 'info', 8000); } };
-  }
-
-  // ---- the offer / alert card: built ONCE, so typing is never interrupted by a refresh ----
-  function buildForm() {
-    $('#qform', root).innerHTML = `<div class="card" style="margin-bottom:12px"><h2 style="margin:0 0 4px">📣 Send offer / alert</h2>
-      <div class="muted small" style="margin-bottom:8px">Shown to every customer who is logged in on the QR page, and sent to their phones as a notification (even if their page is closed). To message only some customers, use <b>Customers → Message QR customers</b>.</div>
-      <div id="nform">${offerFormHTML(OFFER, offerItems, 'n')}</div>
-      <div class="row wrap" style="gap:10px;align-items:center;margin-top:8px"><button class="btn" id="nsend">📣 Send now</button><span class="small" id="npc"></span></div>
-      <div id="nlist"></div></div>`;
-    const busy = b => { $('#nsend', root).disabled = b; };
-    bindOfferForm($('#nform', root), OFFER, 'n', busy, () => offerItems);
-    $('#nsend', root).onclick = wrap(async () => {
-      const row = offerRow(OFFER);
-      const { data, error } = await sb.from('qr_notices').insert(row).select().single();
-      if (error) throw new Error(errMsg(error) + ' (run sql/update-11.sql, update-12.sql and update-13.sql)');
-      Object.assign(OFFER, newOffer()); itemSig = ''; $('#nform', root).innerHTML = offerFormHTML(OFFER, offerItems, 'n'); bindOfferForm($('#nform', root), OFFER, 'n', busy, () => offerItems);
-      const r = await qrPush({ kind: 'notice', title: row.title || state.settings.shop_name, body: row.body, image: row.image_url || undefined, offer_id: data && data.id });
-      if (r && r.error) toast(`Offer is showing on the QR page, but phone notifications failed: ${r.error}`, 'err', 9000);
-      else toast(r && r.sent != null ? `Offer sent · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Offer is now showing on the QR page');
-    });
-    $('#nlist', root).onclick = wrap(async e => { const b = e.target.closest('[data-stopn]'); if (!b) return; await sb.from('qr_notices').update({ active: false }).eq('id', b.dataset.stopn); toast('Stopped'); });
-  }
-  // only the small parts that change on their own (phone count, "showing now" list, item list) are refreshed
-  let itemSig = '';
-  function paintNotices() {
-    const sig = JSON.stringify(offerItems.map(i => [i.id, i.name, i.price]));
-    if (sig !== itemSig) { itemSig = sig; $('#nitems', root).innerHTML = itemsHTML(OFFER, offerItems, 'n'); }
-    $('#npc', root).innerHTML = pushCount == null ? '' : `<span class="${pushCount ? 'muted' : ''}" ${pushCount ? '' : 'style="color:var(--bad)"'}>📱 ${pushCount} phone${pushCount === 1 ? '' : 's'} can get notifications${pushCount ? '' : ' – customers must tap “Turn on notifications” first'}</span>`;
-    $('#nlist', root).innerHTML = notices.length ? `<div style="margin-top:12px"><div class="muted small">Showing now:</div>${notices.map(n => `<div class="row wrap" style="gap:8px;padding:6px 0;border-top:1px solid var(--line)">${n.image_url ? `<img src="${esc(n.image_url)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:8px">` : ''}<div style="flex:1;min-width:180px"><b data-noi18n>${esc(n.title || '')}</b>${(n.offer_items || []).length ? ' <span class="pill ok">🎁 ' + n.offer_items.length + ' item' + (n.offer_items.length > 1 ? 's' : '') + '</span>' : ''}${n.customer_ids ? ` <span class="pill info">👤 ${n.customer_ids.length} customer${n.customer_ids.length > 1 ? 's' : ''}</span>` : ''} <span data-noi18n>${esc(n.body)}</span><div class="muted small">${tstr(n.created_at)}${n.expires_at ? ' · until ' + tstr(n.expires_at) : ''}</div></div><button class="btn ghost sm" data-stopn="${n.id}">Stop showing</button></div>`).join('')}</div>` : '';
   }
 
   function printPoster(url) {

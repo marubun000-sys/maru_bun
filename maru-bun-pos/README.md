@@ -203,3 +203,13 @@ Notes: the notification sound on a closed page is the phone's own notification s
 2. **Settings & Security → 📱 QR menu customers**: search, ✏️ Edit name/phone number, 🔑 New PIN (random or typed; customer is logged out everywhere; send it on WhatsApp), 🗑 Remove. Setting a PIN or removing a customer asks for the authenticator code. A PIN is stored scrambled, so it can never be read back – set a new one instead.
 3. WhatsApp message from Message QR customers now carries only the offer / menu link (no photo link).
 4. The ✕ on the customer's offer card is now a round button that is visible on top of the photo.
+
+## Update 21 – Send offer / alert moved to the Customers tab
+- **Send offer / alert** now lives in **Customers** (button 📣 *Send offer / alert*). It is removed from QR Ordering.
+- Choose **Everyone on the QR menu** or **Choose customers**. Customers are in two groups, each with its own *Select all* plus one *Select all customers*:
+  - 📱 **QR menu customers** (registered on the QR menu, most QR orders first)
+  - 💬 **WhatsApp customers** (numbers saved from POS orders, not registered yet; customers who stopped promos are left out)
+- When a WhatsApp customer registers on the QR menu using the offer link, they automatically move to the QR group.
+- **Send by:** 📱 QR menu + phone notification (only chosen customers see it) and/or 💬 WhatsApp (opens WhatsApp for each customer with the message and the offer link).
+- Every customer row has a button (📱 QR / 🎁 Offer) that opens the panel with that customer already chosen.
+- **Run `sql/update-16.sql`** (after 10–15). No Edge Function redeploy needed.

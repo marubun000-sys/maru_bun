@@ -1,13 +1,8 @@
 import { sb } from '../sb.js';
 import { state } from '../state.js';
 import { $, esc, fmt, dtstr, toast, ico, errMsg, onLive, downloadCSV, modal, promptModal, confirmBox } from '../utils.js';
-import { newOffer, offerFormHTML, bindOfferForm, offerRow } from '../offerform.js';
-import { qrPush } from '../push.js';
-import { orderUrl } from './qr.js';
+import { mountOfferPanel } from './offerpanel.js';
 import { normPhone } from '../utils.js';
-const MSG = newOffer();   // the personal message form keeps what you typed, even after a refresh or closing the window
-const PICK = new Set();    // chosen QR customers (ids)
-let VIA = { qr: true, wa: true };
 
 const PK = 'mb_promo';   // an unfinished promotion (so you can continue after a refresh)
 const loadCamp = () => { try { return JSON.parse(localStorage.getItem(PK) || 'null'); } catch { return null; } };
@@ -33,8 +28,9 @@ export async function render(root) {
   let rows = [], q = '';
   root.innerHTML = `<div class="page-head"><h1>Customers</h1><span class="pill info" id="cnt"></span><div class="spacer"></div>
       <button class="btn" id="promo">📣 Send promotion</button>
-      <button class="btn" id="qmsg">💬 Message QR customers</button>
+      <button class="btn" id="qmsg">📣 Send offer / alert</button>
       <button class="btn ghost sm" id="csv">${ico('download', 14)} Export CSV</button></div>
+    <div id="offerHost"></div>
     <p class="muted small" style="margin-top:-6px">Every customer WhatsApp number typed in POS is saved here automatically.</p>
     <input id="cq" type="search" placeholder="Search name / phone" style="max-width:340px;margin-bottom:10px">
     <div id="err"></div>
@@ -47,7 +43,7 @@ export async function render(root) {
     $('#cnt', root).textContent = `${rows.length} customers`;
     $('#rows', root).innerHTML = l.length ? l.map(r => `<tr><td><b>${esc(r.name || '—')}</b></td><td>+${esc(r.phone)}</td><td class="r">${r.visits}</td><td class="r">${fmt(r.total_spent)}</td><td>${dtstr(r.last_visit)}</td>
       <td><button class="pill ${r.opt_out ? 'bad' : 'ok'}" data-a="opt" data-p="${esc(r.phone)}" title="Tap to change">${r.opt_out ? 'Stopped' : 'Receives'}</button></td>
-      <td class="r" style="white-space:nowrap"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${esc(r.phone)}">WhatsApp</a> ${qrByPhone[normPhone(r.phone)] ? `<button class="btn ghost sm" data-a="qrmsg" data-p="${esc(normPhone(r.phone))}" title="Send an offer / message to this customer's QR menu">📱 QR</button> ` : ''}<button class="btn ghost sm" data-a="edit" data-p="${esc(r.phone)}">${ico('edit', 14)}</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No customers yet</td></tr>';
+      <td class="r" style="white-space:nowrap"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/${esc(r.phone)}">WhatsApp</a> <button class="btn ghost sm" data-a="qrmsg" data-p="${esc(normPhone(r.phone))}" title="Send an offer / message to this customer">${qrByPhone[normPhone(r.phone)] ? '📱 QR' : '🎁 Offer'}</button> <button class="btn ghost sm" data-a="edit" data-p="${esc(r.phone)}">${ico('edit', 14)}</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No customers yet</td></tr>';
   }
   async function load() {
     const { data, error } = await sb.from('customers').select('*').order('last_visit', { ascending: false });
@@ -211,79 +207,10 @@ export async function render(root) {
     draw();
   }
 
-  // ---------------- personal message / offer to customers registered on the QR menu ----------------
-  async function openQrMessage(onlyPhone) {
-    const [cr, ir] = await Promise.all([sb.rpc('qr_customer_list'), sb.from('items').select('id,name,price').eq('active', true).order('name')]);
-    if (cr.error) return toast(errMsg(cr.error) + ' (run sql/update-13.sql)', 'err', 7000);
-    let people = (cr.data || []).slice().sort((a, b) => (b.orders - a.orders) || (a.created_at < b.created_at ? 1 : -1)), items = ir.data || [];   // most QR orders first
-    const one = onlyPhone ? people.find(p => normPhone(p.phone) === onlyPhone) : null;
-    if (onlyPhone && !one) return toast('This customer is not registered on the QR menu', 'err');
-    if (one) { people = [one]; PICK.clear(); PICK.add(one.id); }
-    if (!people.length) return toast('Nobody has registered on the QR menu yet', 'err');
-    let fq = '';
-    const m = modal(`<h3>💬 ${one ? 'Message ' + esc(one.name) : 'Message QR customers'}</h3>
-      <p class="muted small" style="margin-top:-4px">${one ? `+${esc(one.phone)} · ${one.orders} QR order${one.orders === 1 ? '' : 's'}` : 'Customers who registered on your QR menu, the ones with the most QR orders first. Send a personal message or offer to the ones you choose.'}</p>
-      <div class="row wrap" style="gap:10px;margin-bottom:6px" ${one ? 'hidden' : ''}><input id="mq" type="search" placeholder="Search name / phone" style="max-width:240px"><label class="check" style="margin:0"><input type="checkbox" id="mall"> Select all shown</label><span class="pill info" id="mn"></span></div>
-      <div id="ml" style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px" ${one ? 'hidden' : ''}></div>
-      <div style="margin-top:12px">${offerFormHTML(MSG, items, 'm')}</div>
-      <div style="margin:10px 0 2px"><b>Send by</b></div>
-      <label class="check"><input type="checkbox" id="vq" ${VIA.qr ? 'checked' : ''}> 📱 QR menu + phone notification <span class="muted small">(only the chosen customers see it)</span></label>
-      <label class="check"><input type="checkbox" id="vw" ${VIA.wa ? 'checked' : ''}> 💬 WhatsApp <span class="muted small">(opens WhatsApp for each customer with the message and the menu link)</span></label>
-      <div class="row end" style="margin-top:12px;gap:8px"><button class="btn ghost" id="mc">Close</button><button class="btn" id="mgo">Send</button></div>`, { wide: true, outside: false });
-    const shown = () => people.filter(p => !fq || (p.name || '').toLowerCase().includes(fq) || p.phone.includes(fq.replace(/\D/g, '') || '\u0000'));
-    const paint = () => {
-      $('#ml', m.el).innerHTML = shown().map(p => `<label class="row" style="gap:8px;padding:5px 0;margin:0;border-bottom:1px solid var(--line)"><input type="checkbox" data-pid="${p.id}" ${PICK.has(p.id) ? 'checked' : ''}><b data-noi18n>${esc(p.name)}</b><span class="muted small">+${esc(p.phone)}</span><div class="spacer"></div><span class="muted small">${p.orders} order${p.orders === 1 ? '' : 's'}</span>${p.push ? '<span title="Can get phone notifications">🔔</span>' : ''}</label>`).join('') || '<div class="muted small" style="padding:8px">No match</div>';
-      $('#mn', m.el).textContent = `${PICK.size} selected`;
-    };
-    paint();
-    $('#mq', m.el).oninput = e => { fq = e.target.value.toLowerCase().trim(); paint(); };
-    $('#mall', m.el).onchange = e => { shown().forEach(p => (e.target.checked ? PICK.add(p.id) : PICK.delete(p.id))); paint(); };
-    $('#ml', m.el).onchange = e => { const b = e.target.closest('[data-pid]'); if (!b) return; if (b.checked) PICK.add(b.dataset.pid); else PICK.delete(b.dataset.pid); $('#mn', m.el).textContent = `${PICK.size} selected`; };
-    $('#vq', m.el).onchange = e => { VIA.qr = e.target.checked; }; $('#vw', m.el).onchange = e => { VIA.wa = e.target.checked; };
-    const go = $('#mgo', m.el);
-    bindOfferForm(m.el, MSG, 'm', b => { go.disabled = b; }, () => items);
-    $('#mc', m.el).onclick = () => m.close();
-    go.onclick = async () => {
-      try {
-        const chosen = people.filter(p => PICK.has(p.id)); if (!chosen.length) return toast('Choose at least one customer', 'err');
-        const row = offerRow(MSG), hasOffer = row.offer_items.length > 0;
-        const viaQr = VIA.qr || hasOffer, viaWa = VIA.wa;
-        if (!viaQr && !viaWa) return toast('Choose how to send (QR menu or WhatsApp)', 'err');
-        go.disabled = true; let noticeId = '';
-        if (viaQr) {
-          const { data, error } = await sb.from('qr_notices').insert({ ...row, customer_ids: chosen.map(p => p.id) }).select().single();
-          if (error) throw new Error(errMsg(error) + ' (run sql/update-13.sql)');
-          noticeId = data.id;
-          const r = await qrPush({ kind: 'notice', title: row.title || state.settings.shop_name, body: row.body, image: row.image_url || undefined, offer_id: noticeId, customer_ids: chosen.map(p => p.id) });
-          if (r && r.error) toast(`Saved in the QR menu, but phone notification failed: ${r.error}`, 'err', 8000);
-          else toast(r && r.sent != null ? `Sent in the QR menu · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Sent in the QR menu');
-        }
-        const text = [row.title && `*${row.title}*`, row.body, `🍞 ${orderUrl()}${noticeId ? '?offer=' + noticeId : ''}`].filter(Boolean).join('\n');
-        Object.assign(MSG, newOffer()); PICK.clear();
-        m.close();
-        if (viaWa) waOneByOne(chosen, text); else toast('Done ✓');
-      } catch (e) { toast(errMsg(e), 'err', 6000); go.disabled = false; }
-    };
-  }
-  // WhatsApp cannot be sent in bulk from a normal number: open one chat at a time, you press Send in WhatsApp
-  function waOneByOne(list, text) {
-    let i = 0;
-    const m = modal('<div id="wb"></div>', { outside: false });
-    const draw = () => {
-      const box = $('#wb', m.el);
-      if (i >= list.length) { box.innerHTML = '<h3>All done ✓</h3><p class="muted">WhatsApp was opened for every chosen customer.</p><div class="row end"><button class="btn" id="wx">Close</button></div>'; $('#wx', m.el).onclick = () => m.close(); return; }
-      const p = list[i];
-      box.innerHTML = `<h3>💬 WhatsApp · ${i + 1} of ${list.length}</h3><p><b data-noi18n>${esc(p.name)}</b> · +${esc(p.phone)}</p>
-        <div class="card" style="white-space:pre-wrap;font-size:13px" data-noi18n>${esc(personal(text, p.name))}</div>
-        <div class="row end" style="gap:8px;margin-top:10px"><button class="btn ghost" id="wk">Skip</button><button class="btn ghost" id="ws">Stop</button><button class="btn" id="wo">Open WhatsApp</button></div>`;
-      $('#wo', m.el).onclick = () => { window.open(`https://wa.me/${p.phone}?text=${encodeURIComponent(personal(text, p.name))}`, '_blank', 'noopener'); i++; draw(); };
-      $('#wk', m.el).onclick = () => { i++; draw(); };
-      $('#ws', m.el).onclick = () => m.close();
-    };
-    draw();
-  }
-  $('#qmsg', root).onclick = () => openQrMessage().catch(e => toast(errMsg(e), 'err'));
-  root.addEventListener('click', e => { const b = e.target.closest('[data-a=qrmsg]'); if (b) openQrMessage(b.dataset.p).catch(err => toast(errMsg(err), 'err')); });
+  // ---------------- send offer / alert panel (QR menu + WhatsApp customers) ----------------
+  const panel = mountOfferPanel($('#offerHost', root));
+  $('#qmsg', root).onclick = () => panel.toggle();
+  root.addEventListener('click', e => { const b = e.target.closest('[data-a=qrmsg]'); if (b) panel.openFor(b.dataset.p); });
   $('#promo', root).onclick = () => { if (!rows.length) return toast('No customers saved yet', 'err'); openComposer(); };
   $('#cq', root).oninput = e => { q = e.target.value.toLowerCase().trim(); draw(); };
   $('#csv', root).onclick = () => downloadCSV('customers.csv', [['Name', 'Phone', 'Visits', 'Total spent', 'Last visit', 'Promos'], ...rows.map(r => [r.name, '+' + r.phone, r.visits, r.total_spent, r.last_visit, r.opt_out ? 'stopped' : 'receives'])]);
