@@ -220,3 +220,9 @@ Notes: the notification sound on a closed page is the phone's own notification s
 - Customer **My order history** shows only the **current month** (Sri Lanka time). On the 1st of a new month it starts empty. (Old orders stay in your own Orders & Billing records.)
 - New **🔗 share button** on the QR menu: opens the phone's share sheet (WhatsApp etc.); on a computer it shows WhatsApp / Copy link.
 - **Run `sql/update-17.sql`**. No Edge Function redeploy.
+
+## Update 23 – Developer credit
+- All bills show **Designed and Developed by SDream Code** (set in `js/brand.js`).
+- WhatsApp bills (text and picture) also carry https://www.facebook.com/SDreamCode/ ; the printed bill shows the name only.
+- The QR menu footer shows "Designed and Developed by SDream Code" linking to the Facebook page.
+- No SQL, no Edge Function.

@@ -23,7 +23,7 @@ export function billHTML(o, s = state.settings) {
       ${r.extras.map(e => `<div class="r-sub">+ ${esc(e.name)}</div><div class="r-line r-sub2"><span>${e.qty} × ${fmt(e.unit)}</span><span>${fmt(e.total)}</span></div>`).join('')}
     </div>`; }).join('');
   const row = (a, b, cls = '') => `<div class="r-line ${cls}"><span>${a}</span><span>${b}</span></div>`;
-  const soft = (SOFTWARE_NAME || SOFTWARE_SITE) ? `<div class="r-soft">${SOFTWARE_NAME ? 'Software by ' + esc(SOFTWARE_NAME) : ''}${SOFTWARE_NAME && SOFTWARE_SITE ? '<br>' : ''}${esc(siteText())}</div>` : '';
+  const soft = SOFTWARE_NAME ? `<div class="r-soft">Designed and Developed by ${esc(SOFTWARE_NAME)}</div>` : '';
   return `<div class="receipt">
     <div class="r-head">
       <img class="r-logo" src="${LOGO_PRINT}" alt="">
@@ -114,7 +114,7 @@ export function billText(o, s = state.settings) {
   if (s.review_link) { L.push('⭐ Enjoyed it? Rate us on Google:'); L.push(s.review_link); L.push(''); }
   L.push(s.bill_footer || 'Thank you!');
   if (SOFTWARE_NAME || SOFTWARE_SITE) L.push('');
-  if (SOFTWARE_NAME) L.push(`_Software by ${SOFTWARE_NAME}_`);
+  if (SOFTWARE_NAME) L.push(`_Designed and Developed by ${SOFTWARE_NAME}_`);
   if (SOFTWARE_SITE) L.push(SOFTWARE_SITE);
   return L.join('\n');
 }
@@ -169,8 +169,8 @@ export async function billImage(o, s = state.settings, { review = true } = {}) {
   add('hr');
   if (review && s.review_link) { add('center', { t: '⭐ Enjoyed it? Rate us on Google:', f: `600 18px ${FAM}`, h: 28 }); wrap(s.review_link, `400 15px ${FAM}`, W - 2 * P).forEach(t => add('center', { t, f: `400 15px ${FAM}`, h: 22, link: true })); }
   add('center', { t: s.bill_footer || 'Thank you!', f: `600 19px ${FAM}`, h: 34 });
-  if (SOFTWARE_NAME) add('center', { t: 'Software by ' + SOFTWARE_NAME, f: `400 14px ${FAM}`, h: 20, muted: true });
-  if (SOFTWARE_SITE) add('center', { t: siteText(), f: `400 14px ${FAM}`, h: 20, muted: true });
+  if (SOFTWARE_NAME) add('center', { t: 'Designed and Developed by ' + SOFTWARE_NAME, f: `400 14px ${FAM}`, h: 20, muted: true });
+  if (SOFTWARE_SITE) wrap(SOFTWARE_SITE, `400 13px ${FAM}`, W - 2 * P).forEach(t => add('center', { t, f: `400 13px ${FAM}`, h: 19, muted: true }));
 
   const LOGO = 150;
   const H = P * 2 + ops.reduce((n, op) => n + (op.type === 'logo' ? (logo ? LOGO + 12 : 0) : op.type === 'hr' ? 16 : op.h), 0);
@@ -232,7 +232,7 @@ export function showBillModal(o, { title, onClose, keep = false, manage } = {}) 
       <button class="btn ghost" id="bKot">${ico('print')} Kitchen Slip</button>
     </div>
     ${manage ? `<div class="row wrap" style="margin-top:8px"><button class="btn ghost" id="bEdit">${ico('edit')} Change type / payment</button><button class="btn ghost" id="bRefund">↩ Refund</button></div>` : ''}
-    <p class="muted small">WhatsApp bills include your Google review link${SOFTWARE_NAME || SOFTWARE_SITE ? ' and the software company line' : ''}. The printed bill does not show the review link. The <b>picture</b> version carries the logo (on a phone choose WhatsApp in the share list; on a computer the picture is saved and the chat opens).</p>`,
+    <p class="muted small">WhatsApp bills include your Google review link${SOFTWARE_NAME || SOFTWARE_SITE ? ' and the developer link' : ''}. The printed bill does not show the review link. The <b>picture</b> version carries the logo (on a phone choose WhatsApp in the share list; on a computer the picture is saved and the chat opens).</p>`,
     { onClose: () => { if (keep) { try { localStorage.removeItem(OPEN_BILL); } catch { /* ignore */ } } if (onClose) onClose(); }, wide: true, outside: !keep });
   const phone = () => $('#waNum', m.el).value;
   $('#bWa', m.el).onclick = () => { if (!phone().trim()) toast('No number entered - choose the contact inside WhatsApp', 'info'); sendWhatsApp(o, phone()); };

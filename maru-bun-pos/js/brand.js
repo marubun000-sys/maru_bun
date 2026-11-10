@@ -1,4 +1,4 @@
-// Your software company shown at the bottom of every bill (print, WhatsApp text and bill picture).
-// Leave both empty to hide the line.
-export const SOFTWARE_NAME = '';
-export const SOFTWARE_SITE = '';
+// Software company line: "Designed and Developed by <name>".
+// Printed bill: name only. WhatsApp bill (text + picture) and the QR menu: name + link.
+export const SOFTWARE_NAME = 'SDream Code';
+export const SOFTWARE_SITE = 'https://www.facebook.com/SDreamCode/';

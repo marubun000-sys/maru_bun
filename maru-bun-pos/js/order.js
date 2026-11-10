@@ -3,6 +3,7 @@ import { sb } from './sb.js';
 import { $, esc, fmt, money, ico, modal, toast, normPhone, beep } from './utils.js';
 import { initI18n, getLang, setLang } from './i18n.js';
 import { VAPID_PUBLIC } from './pushkey.js';
+import { SOFTWARE_NAME, SOFTWARE_SITE } from './brand.js';
 
 const LS = { get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } }, del: k => { try { localStorage.removeItem(k); } catch { /* ignore */ } } };
 const root = $('#app');
@@ -172,6 +173,7 @@ function draw() {
     <div class="qo-list">${items.map(itemRow).join('') || (menu ? '<div class="empty">Nothing here right now</div>' : '<div class="empty">Loading menu…</div>')}</div>
     <p class="muted small" style="text-align:center;margin:14px 0 90px">Prices are in LKR. The final bill is made at the counter.</p>
   </div>
+  ${SOFTWARE_NAME ? `<div class="qo-dev" data-noi18n>Designed and Developed by ${SOFTWARE_SITE ? `<a href="${esc(SOFTWARE_SITE)}" target="_blank" rel="noopener">${esc(SOFTWARE_NAME)}</a>` : esc(SOFTWARE_NAME)}</div>` : ''}
   ${cartCount() && open ? `<button class="qo-bar" id="qcart"><span><b>${cartCount()}</b> item${cartCount() > 1 ? 's' : ''} · View order</span><b>${money(cartTotal())}</b></button>` : ''}`;
   paintCtl();
 }
