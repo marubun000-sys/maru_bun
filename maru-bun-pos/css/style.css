@@ -336,3 +336,5 @@ button.pill{cursor:pointer;font-family:inherit}
 .op-list{max-height:240px;overflow:auto;margin-top:4px}
 @media(max-width:720px){.op-groups{grid-template-columns:1fr}}
 .qo-dev{text-align:center;font-size:12px;color:var(--muted);padding:18px 12px 90px}.qo-dev a{color:var(--gold);text-decoration:none;font-weight:600}
+.side-dev{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.35}.side-dev a{color:var(--gold);text-decoration:none;font-weight:600}
+@media(max-width:860px){.side-dev{display:none}}

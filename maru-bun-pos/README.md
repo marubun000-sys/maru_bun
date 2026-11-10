@@ -226,3 +226,6 @@ Notes: the notification sound on a closed page is the phone's own notification s
 - WhatsApp bills (text and picture) also carry https://www.facebook.com/SDreamCode/ ; the printed bill shows the name only.
 - The QR menu footer shows "Designed and Developed by SDream Code" linking to the Facebook page.
 - No SQL, no Edge Function.
+
+## Update 24 – Developer credit in the POS
+- The POS sidebar (under the logged-in email) shows **Designed and Developed by SDream Code** (links to the Facebook page). No SQL / Edge Function.

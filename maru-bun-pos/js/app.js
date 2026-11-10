@@ -1,3 +1,4 @@
+import { SOFTWARE_NAME, SOFTWARE_SITE } from './brand.js';
 import { sb, DEMO, RECOVERY_LINK } from './sb.js';
 import { state, loadSettings, saveSettings, getCashier, setCashier } from './state.js';
 import { $, $$, esc, ico, toast, beep, billNo, promptModal, errMsg, nowLabel, dstr, okey, noKitchen, modal } from './utils.js';
@@ -276,7 +277,7 @@ function startApp() {
     <aside class="side">
       <div class="brand"><img src="assets/logo.jpg" alt=""><div><b id="brandName"></b><span>POS System</span></div></div>
       <nav class="nav">${PAGES.map(p => `<a data-p="${p.id}" href="#/${p.id}">${ico(p.icon)}<span>${p.label}</span>${p.id === 'kitchen' ? '<em class="badge" id="kBadge" hidden>0</em>' : p.id === 'qr' ? '<em class="badge" id="qBadge" hidden>0</em>' : ''}</a>`).join('')}</nav>
-      <div class="side-foot">${esc(state.user.email || '')}<br><a href="#" id="logout" style="color:var(--gold)">Sign out</a></div>
+      <div class="side-foot">${esc(state.user.email || '')}<br><a href="#" id="logout" style="color:var(--gold)">Sign out</a>${SOFTWARE_NAME ? `<div class="side-dev" data-noi18n>Designed and Developed by ${SOFTWARE_SITE ? `<a href="${esc(SOFTWARE_SITE)}" target="_blank" rel="noopener">${esc(SOFTWARE_NAME)}</a>` : esc(SOFTWARE_NAME)}</div>` : ''}</div>
     </aside>
     <main class="main">
       <div class="soundbar" id="soundbar" hidden>${ico('bell', 16)} Tap here to turn on sound alerts</div>

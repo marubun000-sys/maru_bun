@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Supabase Edge Function: qr-push
 // Sends a phone notification (Web Push) to customers of the QR ordering page, even when their page is closed.
 // Called by the POS when: an order is confirmed / rejected / ready, or when you send an offer.
