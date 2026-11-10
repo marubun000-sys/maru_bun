@@ -258,7 +258,7 @@ export async function render(root) {
           if (r && r.error) toast(`Saved in the QR menu, but phone notification failed: ${r.error}`, 'err', 8000);
           else toast(r && r.sent != null ? `Sent in the QR menu · ${r.sent} phone${r.sent === 1 ? '' : 's'} notified` : 'Sent in the QR menu');
         }
-        const text = [row.title && `*${row.title}*`, row.body, row.image_url, `🍞 ${orderUrl()}${noticeId ? '?offer=' + noticeId : ''}`].filter(Boolean).join('\n');
+        const text = [row.title && `*${row.title}*`, row.body, `🍞 ${orderUrl()}${noticeId ? '?offer=' + noticeId : ''}`].filter(Boolean).join('\n');
         Object.assign(MSG, newOffer()); PICK.clear();
         m.close();
         if (viaWa) waOneByOne(chosen, text); else toast('Done ✓');

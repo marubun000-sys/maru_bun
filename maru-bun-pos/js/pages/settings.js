@@ -1,6 +1,6 @@
 import { sb, DEMO } from '../sb.js';
 import { state, saveSettings, getCashier, setCashier } from '../state.js';
-import { $, esc, num, toast, ico, confirmBox, errMsg, promptModal, onLive, dtstr } from '../utils.js';
+import { $, esc, num, toast, ico, confirmBox, errMsg, promptModal, onLive, dtstr, modal } from '../utils.js';
 import { isAdminDevice, amAdmin, verifyAdmin, listDevices, approveDevice, removeDevice, renameDevice, deviceId, setDeviceName, fetchMe, requestSettings, clearSettingsRequest, fresh } from '../device.js';
 import { askAuthCode, alertAdmin } from '../security.js';
 
@@ -61,6 +61,12 @@ async function renderInner(root) {
     <div class="tbl-wrap"><table><thead><tr><th>Device</th><th>Cashier on duty</th><th>Status</th><th>Last seen</th><th></th></tr></thead><tbody id="devRows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div>
   </div>
 
+  <div class="card" id="qrCust"><h2>📱 QR menu customers</h2>
+    <p class="muted small">Customers who registered on the QR menu. You can fix their name or phone number, set a <b>new PIN</b> if they forgot it, or remove them. A PIN is stored scrambled, so it can never be read back – set a new one and tell the customer.</p>
+    <div class="row wrap" style="gap:10px;margin-bottom:8px"><input id="qcq" type="search" placeholder="Search name / phone" style="max-width:260px"><span class="pill info" id="qcn"></span></div>
+    <div id="qcBody"><div class="muted">Loading…</div></div>
+  </div>
+
   <div class="cols">
     <div class="card"><h2>Counter / Cashier on duty</h2>
       <label>Name of the person at the counter now<input id="cashier" value="${esc(getCashier())}" placeholder="e.g. Kasun"></label>
@@ -98,6 +104,8 @@ async function renderInner(root) {
       <button class="btn ghost" id="chpw">Change password</button>
     </div>
   </div>`;
+
+  qrCustomers(root);
 
   // ---------- save handlers ----------
   const save = async (patch, msg = 'Saved') => { try { await saveSettings(patch); toast(msg); } catch (e) { toast(errMsg(e), 'err', 6000); } };
@@ -198,4 +206,67 @@ async function renderInner(root) {
   const offDev = onLive(drawDevs, 400);
   await drawDevs();
   return () => offDev();
+}
+
+// ---------- QR menu customers: edit / new PIN / remove ----------
+function qrCustomers(root) {
+  const box = $('#qrCust', root); let people = [], q = '';
+  const msg = e => errMsg(e).replace(/^.*?Error:\s*/, '');
+  const draw = () => {
+    const l = people.filter(p => !q || (p.name || '').toLowerCase().includes(q) || p.phone.includes(q.replace(/\D/g, '') || '\u0000'));
+    $('#qcn', box).textContent = `${people.length} customer${people.length === 1 ? '' : 's'}`;
+    $('#qcBody', box).innerHTML = l.length ? `<div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Phone</th><th class="r">QR orders</th><th>Registered</th><th></th></tr></thead><tbody>${l.map(p => `<tr><td><b data-noi18n>${esc(p.name)}</b>${p.locked ? ' <span class="pill bad" title="Too many wrong PINs – set a new PIN to unlock">Locked</span>' : ''}</td><td>+${esc(p.phone)}</td><td class="r">${p.orders}</td><td>${p.created_at ? dtstr(p.created_at) : '—'}</td>
+      <td class="r" style="white-space:nowrap"><button class="btn ghost sm" data-qa="edit" data-id="${p.id}">✏️ Edit</button> <button class="btn ghost sm" data-qa="pin" data-id="${p.id}">🔑 New PIN</button> <button class="btn ghost sm" data-qa="del" data-id="${p.id}" style="color:var(--bad)">🗑 Remove</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${people.length ? 'No match' : 'Nobody has registered on the QR menu yet'}</div>`;
+  };
+  const load = async () => {
+    const r = await sb.rpc('qr_customer_list');
+    if (r.error) { $('#qcBody', box).innerHTML = `<div class="err">${esc(msg(r.error))}<br><small>Run sql/update-15.sql (and update-10 to update-14) in the Supabase SQL Editor first.</small></div>`; return; }
+    people = r.data || []; draw();
+  };
+  const sendPin = (p, pin) => {
+    const text = `Hi ${p.name}, your new PIN for the ${state.settings.shop_name || 'මරු Bun'} QR menu is ${pin}. Log in with your phone number and this PIN.`;
+    const m = modal(`<h3>🔑 New PIN set</h3><p>${esc(p.name)} · +${esc(p.phone)}</p><div style="font-size:34px;font-weight:800;letter-spacing:8px;text-align:center;margin:10px 0;color:var(--gold)">${esc(pin)}</div>
+      <p class="muted small">They were logged out on every phone. Tell them this PIN now – it will not be shown again.</p>
+      <div class="row end" style="gap:8px;flex-wrap:wrap"><button class="btn ghost" id="pc">Copy</button><a class="btn" id="pw" target="_blank" rel="noopener" href="https://wa.me/${esc(p.phone)}?text=${encodeURIComponent(text)}">💬 Send on WhatsApp</a><button class="btn ghost" id="pk">Close</button></div>`, { outside: false });
+    $('#pk', m.el).onclick = () => m.close();
+    $('#pc', m.el).onclick = async () => { try { await navigator.clipboard.writeText(pin); toast('Copied'); } catch { toast(pin); } };
+  };
+  box.onclick = async e => {
+    const b = e.target.closest('[data-qa]'); if (!b) return; const p = people.find(x => x.id === b.dataset.id); if (!p) return;
+    try {
+      if (b.dataset.qa === 'edit') {
+        const m = modal(`<h3>✏️ Edit customer</h3><label>Name<input id="en" maxlength="60" value="${esc(p.name)}"></label><label>Phone number<input id="ep" inputmode="tel" value="${esc(p.phone)}"></label>
+          <p class="muted small">The new phone number is what they type to log in.</p><div id="ee"></div><div class="row end" style="gap:8px"><button class="btn ghost" id="ec">Cancel</button><button class="btn" id="es">Save</button></div>`, { outside: false });
+        $('#ec', m.el).onclick = () => m.close();
+        $('#es', m.el).onclick = async () => {
+          const r = await sb.rpc('qr_admin_update', { p_id: p.id, p_name: $('#en', m.el).value, p_phone: $('#ep', m.el).value });
+          if (r.error) { $('#ee', m.el).innerHTML = `<div class="err">${esc(msg(r.error))}</div>`; return; }
+          m.close(); toast('Saved'); load();
+        };
+      } else if (b.dataset.qa === 'pin') {
+        const rnd = () => String(Math.floor(1000 + Math.random() * 9000));
+        const m = modal(`<h3>🔑 New PIN for ${esc(p.name)}</h3><p class="muted small">Type a PIN (4–6 digits) or use the random one. The customer will be logged out everywhere.</p>
+          <div class="row" style="gap:8px"><input id="qpin" inputmode="numeric" maxlength="6" value="${rnd()}" style="font-size:22px;letter-spacing:6px;text-align:center"><button class="btn ghost" id="ng" type="button">🎲 Random</button></div><div id="ne"></div>
+          <div class="row end" style="gap:8px;margin-top:10px"><button class="btn ghost" id="nc">Cancel</button><button class="btn" id="ns">Set PIN</button></div>`, { outside: false });
+        $('#ng', m.el).onclick = () => { $('#qpin', m.el).value = rnd(); };
+        $('#nc', m.el).onclick = () => m.close();
+        $('#ns', m.el).onclick = async () => {
+          const pin = $('#qpin', m.el).value.trim();
+          if (!/^\d{4,6}$/.test(pin)) { $('#ne', m.el).innerHTML = '<div class="err">PIN must be 4 to 6 digits</div>'; return; }
+          if (!await askAuthCode('Set a customer PIN – enter your authenticator code')) { $('#ne', m.el).innerHTML = '<div class="err">The authenticator code is needed</div>'; return; }
+          const r = await sb.rpc('qr_admin_set_pin', { p_id: p.id, p_pin: pin });
+          if (r.error) { $('#ne', m.el).innerHTML = `<div class="err">${esc(msg(r.error))}</div>`; return; }
+          m.close(); sendPin(p, pin); load();
+        };
+      } else if (b.dataset.qa === 'del') {
+        if (!await confirmBox(`Remove ${p.name} (+${p.phone}) from the QR menu? They will have to register again. Their old orders stay in your records.`, 'Remove')) return;
+        if (!await askAuthCode('Remove a QR customer – enter your authenticator code')) return toast('The authenticator code is needed', 'err');
+        const r = await sb.rpc('qr_admin_delete', { p_id: p.id });
+        if (r.error) return toast(msg(r.error), 'err');
+        toast('Removed'); load();
+      }
+    } catch (err) { toast(errMsg(err), 'err'); }
+  };
+  $('#qcq', box).oninput = e => { q = e.target.value.toLowerCase().trim(); draw(); };
+  load();
 }

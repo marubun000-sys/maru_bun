@@ -197,3 +197,9 @@ Notes: the notification sound on a closed page is the phone's own notification s
 2. Offer form (QR Ordering and Customers): **✏️ Custom offer item** = your own name + price (e.g. a combo shown in the photo). Optional "stock link" lowers the stock of a chosen menu item when ordered.
 3. Customers table: customers who registered on the QR menu get a **📱 QR** button next to WhatsApp – opens a message/offer for just that customer.
 4. Message QR customers: the list shows the customers with the most QR orders first.
+
+## Update 20 – manage QR customers in Settings & Security; WhatsApp offer link only; clearer ✕ on offers
+1. Run `sql/update-15.sql` (after update-14). No Edge Function change.
+2. **Settings & Security → 📱 QR menu customers**: search, ✏️ Edit name/phone number, 🔑 New PIN (random or typed; customer is logged out everywhere; send it on WhatsApp), 🗑 Remove. Setting a PIN or removing a customer asks for the authenticator code. A PIN is stored scrambled, so it can never be read back – set a new one instead.
+3. WhatsApp message from Message QR customers now carries only the offer / menu link (no photo link).
+4. The ✕ on the customer's offer card is now a round button that is visible on top of the photo.

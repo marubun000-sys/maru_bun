@@ -173,7 +173,15 @@ function qrRpc(name, a) {
       .map(o => ({ id: o.id, code: o.code, status: o.status, order_type: o.order_type, items: o.items, subtotal: o.subtotal, created_at: o.created_at, reason: o.reason,
         ready: !!(o.order_id && (d.orders.find(x => x.id === o.order_id) || {}).status === 'served') })));
   }
-  if (name === 'qr_customer_list') return ok((d.qr_customers || []).map(c => ({ id: c.id, name: c.name, phone: c.phone, created_at: c.created_at, orders: d.qr_orders.filter(o => o.customer_id === c.id).length, push: false })));
+  if (name === 'qr_admin_update') {
+    const c = d.qr_customers.find(x => x.id === a.p_id); if (!c) return err('Customer not found'); const p = ph(a.p_phone), nm = String(a.p_name || '').trim();
+    if (!nm) return err('Please enter the name'); if (!/^\d{9,15}$/.test(p)) return err('Please enter a valid phone number');
+    if (d.qr_customers.some(x => x.phone === p && x.id !== c.id)) return err('This phone number is already used by another QR customer');
+    c.name = nm; c.phone = p; save(d); return ok({ name: nm, phone: p });
+  }
+  if (name === 'qr_admin_set_pin') { const c = d.qr_customers.find(x => x.id === a.p_id); if (!c) return err('Customer not found'); if (!/^\d{4,6}$/.test(a.p_pin || '')) return err('PIN must be 4 to 6 digits'); c.pin = a.p_pin; c.token = uid() + uid(); c.fails = 0; c.locked_until = 0; save(d); return ok(true); }
+  if (name === 'qr_admin_delete') { d.qr_customers = d.qr_customers.filter(x => x.id !== a.p_id); d.qr_orders.forEach(o => { if (o.customer_id === a.p_id) o.customer_id = null; }); save(d); return ok(true); }
+  if (name === 'qr_customer_list') return ok((d.qr_customers || []).map(c => ({ id: c.id, name: c.name, phone: c.phone, created_at: c.created_at, locked: (c.locked_until || 0) > Date.now(), orders: d.qr_orders.filter(o => o.customer_id === c.id).length, push: false })));
   if (name === 'qr_notices') {
     const me = byTok(a.p_token); if (!me) return ok([]);
     return ok((d.qr_notices || []).filter(n => (!n.customer_ids || n.customer_ids.includes(me.id)) && n.active !== false && (!n.expires_at || n.expires_at > new Date().toISOString())).sort((x, y) => (x.created_at < y.created_at ? 1 : -1)).slice(0, 5).map(n => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at, image_url: n.image_url || null, offer_items: n.offer_items || [] })));
